@@ -183,6 +183,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                 if (postIds != null && !postIds.Contains(jsonEntry.Id.Trim(), StringComparer.OrdinalIgnoreCase))
                 {
+                    skippedIncludesList.Add(jsonEntry.Id);
                     var msg = "Not included in specified Post IDs so that it will be skipped";
                     _logger.Debug($"[{jsonEntry.Id}] {msg}");
                     OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
@@ -191,6 +192,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                 if (!string.IsNullOrEmpty(upgradeId) && !string.IsNullOrEmpty(jsonEntry.Attributes.UpgradeUrl) && !jsonEntry.Attributes.UpgradeUrl.EndsWith(upgradeId))
                 {
+                    skippedIncludesList.Add(jsonEntry.Id);
                     var msg = $"Upgrade URL doesn't end with {upgradeId} so that it will be skipped";
                     _logger.Debug($"[{jsonEntry.Id}] {msg}");
                     OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
@@ -201,6 +203,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 {
                     if (!string.IsNullOrEmpty(titleInclude) && !jsonEntry.Attributes.Title.Contains(titleInclude))
                     {
+                        skippedIncludesList.Add(jsonEntry.Id);
                         var msg = $"Title doesn't include {titleInclude} so that it will be skipped";
                         _logger.Debug($"[{jsonEntry.Id}] {msg}");
                         OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
@@ -209,6 +212,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                     if (!string.IsNullOrEmpty(titleExclude) && jsonEntry.Attributes.Title.Contains(titleExclude))
                     {
+                        skippedIncludesList.Add(jsonEntry.Id);
                         var msg = $"Title includes {titleInclude} so that it will be skipped";
                         _logger.Debug($"[{jsonEntry.Id}] {msg}");
                         OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
