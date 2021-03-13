@@ -1,39 +1,34 @@
-﻿using System;
+﻿using HtmlAgilityPack;
+using Microsoft.Extensions.Configuration;
+using NLog;
+using PatreonDownloader.Common.Interfaces.Plugins;
+using PatreonDownloader.Interfaces.Models;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using HtmlAgilityPack;
-using Microsoft.Extensions.Configuration;
-using NLog;
-using NLog.Fluent;
-using PatreonDownloader.Common.Interfaces.Plugins;
-using PatreonDownloader.Interfaces.Models;
 
 namespace PatreonDownloader.MegaDownloader
 {
     public class Plugin : IPlugin
     {
-        public string Name => "Mega.nz Downloader";
-        public string Author => "Aleksey Tsutsey";
-        public string ContactInformation => "https://github.com/Megalan/PatreonDownloader";
+        private static readonly Regex NewFormatRegex;
+        private static readonly Regex OldFormatRegex;
+        private static readonly MegaCredentials MegaCredentials;
+        private static readonly MegaDownloader MegaDownloader;
 
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
         private bool _overwriteFiles;
 
-        private readonly static Regex _newFormatRegex;
-        private readonly static Regex _oldFormatRegex;
-        private readonly static MegaCredentials _megaCredentials;
-        private static MegaDownloader _megaDownloader;
-
         static Plugin()
         {
-            _newFormatRegex = new Regex(@"/(?<type>(file|folder))/(?<id>[^#]+)#(?<key>[a-zA-Z0-9_-]+)");//Regex("(#F|#)![a-zA-Z0-9]{0,8}![a-zA-Z0-9_-]+");
-            _oldFormatRegex = new Regex(@"#(?<type>F?)!(?<id>[^!]+)!(?<key>[^$!\?]+)");
+            NewFormatRegex =
+                new Regex(@"/(?<type>(file|folder))/(?<id>[^#]+)#(?<key>[a-zA-Z0-9_-]+)"); //Regex("(#F|#)![a-zA-Z0-9]{0,8}![a-zA-Z0-9_-]+");
+            OldFormatRegex = new Regex(@"#(?<type>F?)!(?<id>[^!]+)!(?<key>[^$!\?]+)");
 
-            string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mega_credentials.json");
+            var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mega_credentials.json");
 
             IConfiguration configuration = new ConfigurationBuilder()
                 .AddJsonFile(configPath, true, false)
@@ -41,39 +36,48 @@ namespace PatreonDownloader.MegaDownloader
 
             if (!File.Exists(configPath))
             {
-                LogManager.GetCurrentClassLogger().Warn("!!!![MEGA]: mega_credentials.json not found, mega downloading will be limited! Refer to documentation for additional information. !!!!");
+                LogManager.GetCurrentClassLogger()
+                    .Warn(
+                        "!!!![MEGA]: mega_credentials.json not found, mega downloading will be limited! Refer to documentation for additional information. !!!!");
             }
             else
             {
-                _megaCredentials = new MegaCredentials(configuration["email"], configuration["password"]);
+                MegaCredentials = new MegaCredentials(configuration["email"], configuration["password"]);
             }
 
             try
             {
-                _megaDownloader = new MegaDownloader(_megaCredentials);
+                MegaDownloader = new MegaDownloader(MegaCredentials);
             }
             catch (Exception ex)
             {
-                LogManager.GetCurrentClassLogger().Fatal("!!!![MEGA]: Unable to initialize mega downloader, check email and password! No mega files will be downloaded in this session. !!!!");
+                LogManager.GetCurrentClassLogger()
+                    .Fatal(ex,
+                        "!!!![MEGA]: Unable to initialize mega downloader, check email and password! No mega files will be downloaded in this session. !!!!");
             }
         }
 
-        public async Task BeforeStart(bool overwriteFiles)
+        public string Name => "Mega.nz Downloader";
+        public string Author => "Aleksey Tsutsey";
+        public string ContactInformation => "https://github.com/Megalan/PatreonDownloader";
+
+        public Task BeforeStart(bool overwriteFiles)
         {
             _overwriteFiles = overwriteFiles;
+            return Task.CompletedTask;
         }
 
-        public async Task Download(CrawledUrl crawledUrl, string downloadDirectory)
+        public Task Download(CrawledUrl crawledUrl, string downloadDirectory)
         {
-            if (_megaDownloader == null)
+            if (MegaDownloader == null)
             {
                 _logger.Fatal($"Mega downloader initialization failure (check credentials), {crawledUrl.Url} will not be downloaded!");
-                return;
+                return Task.CompletedTask;
             }
 
             try
             {
-                var result = _megaDownloader.DownloadUrl(crawledUrl, downloadDirectory);
+                var result = MegaDownloader.DownloadUrl(crawledUrl, downloadDirectory);
 
                 if (result != MegaDownloadResult.Success)
                 {
@@ -83,64 +87,66 @@ namespace PatreonDownloader.MegaDownloader
             catch (Exception ex)
             {
                 _logger.Error(ex, $"MEGA DOWNLOAD EXCEPTION: {ex}");
-
             }
+
+            return Task.CompletedTask;
         }
 
-        public async Task<List<string>> ExtractSupportedUrls(string htmlContents)
+        public Task<List<string>> ExtractSupportedUrls(string htmlContents)
         {
-            List<string> retList = new List<string>();
-            HtmlDocument doc = new HtmlDocument();
+            var retList = new List<string>();
+            var doc = new HtmlDocument();
             doc.LoadHtml(htmlContents);
-            string parseText = string.Join(" ", doc.DocumentNode.Descendants()
+            var parseText = string.Join(" ", doc.DocumentNode.Descendants()
                 .Where(n => !n.HasChildNodes && !string.IsNullOrWhiteSpace(n.InnerText))
                 .Select(n => n.InnerText)); //first get a copy of text without all html tags
-            parseText += doc.DocumentNode.InnerHtml; //now append a copy of this text with all html tags intact (otherwise we lose all <a href=... links)
+            parseText += doc.DocumentNode
+                .InnerHtml; //now append a copy of this text with all html tags intact (otherwise we lose all <a href=... links)
 
-            MatchCollection matchesNewFormat = _newFormatRegex.Matches(parseText);
+            var matchesNewFormat = NewFormatRegex.Matches(parseText);
 
-            MatchCollection matchesOldFormat = _oldFormatRegex.Matches(parseText);
+            var matchesOldFormat = OldFormatRegex.Matches(parseText);
 
             _logger.Debug($"Found NEW:{matchesNewFormat.Count}|OLD:{matchesOldFormat.Count} possible mega links in description");
 
-            List<string> megaUrls = new List<string>();
+            var megaUrls = new List<string>();
 
             foreach (Match match in matchesNewFormat)
             {
                 _logger.Debug($"Parsing mega match new format {match.Value}");
-                megaUrls.Add($"https://mega.nz/{match.Groups["type"].Value.Trim()}/{match.Groups["id"].Value.Trim()}#{match.Groups["key"].Value.Trim()}");
+                megaUrls.Add(
+                    $"https://mega.nz/{match.Groups["type"].Value.Trim()}/{match.Groups["id"].Value.Trim()}#{match.Groups["key"].Value.Trim()}");
             }
 
             foreach (Match match in matchesOldFormat)
             {
                 _logger.Debug($"Parsing mega match old format {match.Value}");
-                megaUrls.Add($"https://mega.nz/#{match.Groups["type"].Value.Trim()}!{match.Groups["id"].Value.Trim()}!{match.Groups["key"].Value.Trim()}");
+                megaUrls.Add(
+                    $"https://mega.nz/#{match.Groups["type"].Value.Trim()}!{match.Groups["id"].Value.Trim()}!{match.Groups["key"].Value.Trim()}");
             }
 
-            foreach (string url in megaUrls)
+            foreach (var url in megaUrls)
             {
-                string sanitizedUrl = url.Split(' ')[0].Replace("&lt;wbr&gt;", "").Replace("&lt;/wbr&gt;", "");
+                var sanitizedUrl = url.Split(' ')[0].Replace("&lt;wbr&gt;", "").Replace("&lt;/wbr&gt;", "");
                 _logger.Debug($"Adding mega match {sanitizedUrl}");
                 if (retList.Contains(sanitizedUrl))
                 {
                     _logger.Debug($"Already parsed, skipping: {sanitizedUrl}");
                     continue;
                 }
+
                 retList.Add(sanitizedUrl);
             }
 
-            return retList;
+            return Task.FromResult(retList);
         }
 
-        public async Task<bool> IsSupportedUrl(string url)
+        public Task<bool> IsSupportedUrl(string url)
         {
-            MatchCollection matchesNewFormat = _newFormatRegex.Matches(url);
-            MatchCollection matchesOldFormat = _oldFormatRegex.Matches(url);
+            var matchesNewFormat = NewFormatRegex.Matches(url);
+            var matchesOldFormat = OldFormatRegex.Matches(url);
 
-            if (matchesOldFormat.Count > 0 || matchesNewFormat.Count > 0)
-                return true;
-
-            return false;
+            return Task.FromResult(matchesOldFormat.Count > 0 || matchesNewFormat.Count > 0);
         }
     }
 }

@@ -1,13 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
 using NLog;
-using PatreonDownloader.Common.Enums;
 using PatreonDownloader.Common.Interfaces.Plugins;
-using PatreonDownloader.Engine.Events;
 using PatreonDownloader.Engine.Exceptions;
 using PatreonDownloader.Engine.Helpers;
 using PatreonDownloader.Interfaces.Models;
@@ -15,28 +14,22 @@ using PatreonDownloader.Interfaces.Models;
 namespace PatreonDownloader.Engine
 {
     /// <summary>
-    /// This is the default download/parsing plugin for all files
-    /// This plugin is used when no other plugins are available for url
+    ///     This is the default download/parsing plugin for all files
+    ///     This plugin is used when no other plugins are available for url
     /// </summary>
     internal sealed class DefaultPlugin : IPlugin
     {
-        private IWebDownloader _webDownloader;
-        private IRemoteFilenameRetriever _remoteFilenameRetriever;
+        private static readonly Regex FileIdRegex; //Regex used to retrieve file id from its url
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly IRemoteFilenameRetriever _remoteFilenameRetriever;
+        private readonly IWebDownloader _webDownloader;
         private Dictionary<string, int> _fileCountDict; //file counter for duplicate check
         private bool _overwriteFiles;
 
-        private static readonly Regex _fileIdRegex; //Regex used to retrieve file id from its url
-
-        public string Name => "Default plugin";
-
-        public string Author => "Aleksey Tsutsey";
-        public string ContactInformation => "https://github.com/Megalan/PatreonDownloader";
-
         static DefaultPlugin()
         {
-            _fileIdRegex =
+            FileIdRegex =
                 new Regex(
                     "https:\\/\\/(.+)\\.patreonusercontent\\.com\\/(.+)\\/(.+)\\/patreon-media\\/p\\/post\\/([0-9]+)\\/([a-z0-9]+)",
                     RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -49,29 +42,33 @@ namespace PatreonDownloader.Engine
                                        throw new ArgumentNullException(nameof(remoteFilenameRetriever));
         }
 
-        public async Task<bool> IsSupportedUrl(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return false;
+        public string Name => "Default plugin";
 
-            return await Task.FromResult(true);
+        public string Author => "Aleksey Tsutsey";
+        public string ContactInformation => "https://github.com/Megalan/PatreonDownloader";
+
+        public Task<bool> IsSupportedUrl(string url)
+        {
+            return Task.FromResult(!string.IsNullOrEmpty(url));
         }
 
         public async Task Download(CrawledUrl crawledUrl, string downloadDirectory)
         {
-            if(crawledUrl == null)
+            if (crawledUrl == null)
+            {
                 throw new ArgumentNullException(nameof(crawledUrl));
-            if(string.IsNullOrEmpty(downloadDirectory))
+            }
+
+            if (string.IsNullOrEmpty(downloadDirectory))
+            {
                 throw new ArgumentException("Argument cannot be null or empty", nameof(downloadDirectory));
+            }
 
             if (crawledUrl.Url.IndexOf("dropbox.com/", StringComparison.Ordinal) != -1)
             {
                 if (!crawledUrl.Url.EndsWith("?dl=1"))
                 {
-                    if (crawledUrl.Url.EndsWith("?dl=0"))
-                        crawledUrl.Url = crawledUrl.Url.Replace("?dl=0", "?dl=1");
-                    else
-                        crawledUrl.Url = $"{crawledUrl.Url}?dl=1";
+                    crawledUrl.Url = crawledUrl.Url.EndsWith("?dl=0") ? crawledUrl.Url.Replace("?dl=0", "?dl=1") : $"{crawledUrl.Url}?dl=1";
                 }
 
                 _logger.Debug($"[{crawledUrl.PostId}] This is a dropbox entry: {crawledUrl.Url}");
@@ -85,45 +82,32 @@ namespace PatreonDownloader.Engine
                      crawledUrl.Url.IndexOf("youtu.be/", StringComparison.Ordinal) != -1)
             {
                 //TODO: YOUTUBE SUPPORT?
-                _logger.Fatal($"[{crawledUrl.PostId}] [NOT SUPPORTED] YOUTUBE link found: {crawledUrl.Url}");
+                //_logger.Fatal($"[{crawledUrl.PostId}] [NOT SUPPORTED] YOUTUBE link found: {crawledUrl.Url}");
             }
             else if (crawledUrl.Url.IndexOf("imgur.com/", StringComparison.Ordinal) != -1)
             {
                 //TODO: IMGUR SUPPORT
-                _logger.Fatal($"[{crawledUrl.PostId}] [NOT SUPPORTED] IMGUR link found: {crawledUrl.Url}");
+                //_logger.Fatal($"[{crawledUrl.PostId}] [NOT SUPPORTED] IMGUR link found: {crawledUrl.Url}");
             }
 
-            string filename = $"{crawledUrl.PostId}_";
+            var filename = string.Empty;
 
-            switch (crawledUrl.UrlType)
-            {
-                case CrawledUrlType.PostFile:
-                    filename += "post";
-                    break;
-                case CrawledUrlType.PostAttachment:
-                    filename += "attachment";
-                    break;
-                case CrawledUrlType.PostMedia:
-                    filename += "media";
-                    break;
-                case CrawledUrlType.AvatarFile:
-                    filename += "avatar";
-                    break;
-                case CrawledUrlType.CoverFile:
-                    filename += "cover";
-                    break;
-                case CrawledUrlType.ExternalUrl:
-                    filename += "external";
-                    break;
-                default:
-                    throw new ArgumentException($"Invalid url type: {crawledUrl.UrlType}");
-            }
+            //filename += crawledUrl.UrlType switch
+            //{
+            //    CrawledUrlType.PostFile => "post",
+            //    CrawledUrlType.PostAttachment => "attachment",
+            //    CrawledUrlType.PostMedia => "media",
+            //    CrawledUrlType.AvatarFile => "avatar",
+            //    CrawledUrlType.CoverFile => "cover",
+            //    CrawledUrlType.ExternalUrl => "external",
+            //    CrawledUrlType.Unknown => string.Empty,
+            //    _ => throw new ArgumentException($"Invalid url type: {crawledUrl.UrlType}")
+            //};
 
             if (crawledUrl.Filename == null)
             {
                 _logger.Debug($"No filename for {crawledUrl.Url}, trying to retrieve...");
-                string remoteFilename =
-                    await _remoteFilenameRetriever.RetrieveRemoteFileName(crawledUrl.Url);
+                var remoteFilename = await _remoteFilenameRetriever.RetrieveRemoteFileName(crawledUrl.Url);
 
                 if (remoteFilename == null)
                 {
@@ -131,40 +115,45 @@ namespace PatreonDownloader.Engine
                         $"[{crawledUrl.PostId}] Unable to retrieve name for external entry of type {crawledUrl.UrlType}: {crawledUrl.Url}");
                 }
 
-                filename += $"_{remoteFilename}";
+                filename += $"{remoteFilename}";
             }
             else
             {
                 _logger.Debug($"Filename for {crawledUrl.Url} is {crawledUrl.Filename}");
-                filename += $"_{crawledUrl.Filename}";
+                filename += $"{crawledUrl.Filename}";
             }
 
             _logger.Debug($"Sanitizing filename: {filename}");
-            foreach (char c in System.IO.Path.GetInvalidFileNameChars())
-            {
-                filename = filename.Replace(c, '_');
-            }
+            filename = Path.GetInvalidFileNameChars().Aggregate(filename, (current, c) => current.Replace(c, '_'));
 
-            string key = $"{crawledUrl.PostId}_{filename.ToLowerInvariant()}";
+            var key = $"{crawledUrl.PostId}_{filename.ToLowerInvariant()}";
             if (!_fileCountDict.ContainsKey(key))
+            {
                 _fileCountDict.Add(key, 0);
+            }
 
             _fileCountDict[key]++;
 
             if (_fileCountDict[key] > 1)
             {
-                _logger.Warn($"Found more than a single file with the name {filename} in post {crawledUrl.PostId}, file id/sequential number will be appended to its name.");
+                _logger.Warn(
+                    $"Found more than a single file with the name {filename} in post {crawledUrl.PostId}, file id/sequential number will be appended to its name.");
 
-                string appendStr = _fileCountDict[key].ToString();
+                var appendStr = _fileCountDict[key].ToString();
 
                 if (crawledUrl.UrlType != CrawledUrlType.ExternalUrl)
                 {
-                    MatchCollection matches = _fileIdRegex.Matches(crawledUrl.Url);
+                    var matches = FileIdRegex.Matches(crawledUrl.Url);
 
                     if (matches.Count == 0)
+                    {
                         throw new DownloadException($"[{crawledUrl.PostId}] Unable to retrieve file id for {crawledUrl.Url}, contact developer!");
+                    }
+
                     if (matches.Count > 1)
+                    {
                         throw new DownloadException($"[{crawledUrl.PostId}] More than 1 media found in URL {crawledUrl.Url}");
+                    }
 
                     appendStr = matches[0].Groups[5].Value;
                 }
@@ -179,22 +168,25 @@ namespace PatreonDownloader.Engine
         {
             _overwriteFiles = overwriteFiles;
             _fileCountDict = new Dictionary<string, int>();
+            await Task.CompletedTask;
         }
 
-        public async Task<List<string>> ExtractSupportedUrls(string htmlContents)
+        public Task<List<string>> ExtractSupportedUrls(string htmlContents)
         {
-            List<string> retList = new List<string>(); 
-            HtmlDocument doc = new HtmlDocument();
+            var retList = new List<string>();
+            var doc = new HtmlDocument();
             doc.LoadHtml(htmlContents);
-            HtmlNodeCollection imgNodeCollection = doc.DocumentNode.SelectNodes("//img");
+            var imgNodeCollection = doc.DocumentNode.SelectNodes("//img");
             if (imgNodeCollection != null)
             {
                 foreach (var imgNode in imgNodeCollection)
                 {
                     if (imgNode.Attributes.Count == 0 || !imgNode.Attributes.Contains("src"))
+                    {
                         continue;
+                    }
 
-                    string url = imgNode.Attributes["src"].Value;
+                    var url = imgNode.Attributes["src"].Value;
 
                     if (IsAllowedUrl(url))
                     {
@@ -205,13 +197,15 @@ namespace PatreonDownloader.Engine
                 }
             }
 
-            HtmlNodeCollection linkNodeCollection = doc.DocumentNode.SelectNodes("//a");
+            var linkNodeCollection = doc.DocumentNode.SelectNodes("//a");
             if (linkNodeCollection != null)
             {
                 foreach (var linkNode in linkNodeCollection)
                 {
                     if (linkNode.Attributes.Count == 0 || !linkNode.Attributes.Contains("href"))
+                    {
                         continue;
+                    }
 
                     var url = linkNode.Attributes["href"].Value;
 
@@ -223,11 +217,11 @@ namespace PatreonDownloader.Engine
                 }
             }
 
-            return retList;
+            return Task.FromResult(retList);
         }
 
         private bool IsAllowedUrl(string url)
-        { 
+        {
             if (url.StartsWith("https://mega.nz/"))
             {
                 //This should never be called if mega plugin is installed
@@ -236,7 +230,7 @@ namespace PatreonDownloader.Engine
             }
 
             if (url.IndexOf("youtube.com/watch?v=", StringComparison.Ordinal) != -1 ||
-                     url.IndexOf("youtu.be/", StringComparison.Ordinal) != -1)
+                url.IndexOf("youtu.be/", StringComparison.Ordinal) != -1)
             {
                 //TODO: YOUTUBE SUPPORT?
                 _logger.Fatal($"[NOT SUPPORTED] YOUTUBE link found: {url}");

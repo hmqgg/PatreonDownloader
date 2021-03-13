@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using NLog;
+﻿using NLog;
 using NLog.Config;
 using NLog.Targets;
 
@@ -11,14 +8,14 @@ namespace PatreonDownloader.App
     {
         public static void ReconfigureNLog(bool debug = false)
         {
-            LoggingConfiguration configuration = new LoggingConfiguration();
-            ColoredConsoleTarget consoleTarget = new ColoredConsoleTarget("console")
+            var configuration = new LoggingConfiguration();
+            var consoleTarget = new ColoredConsoleTarget("console")
             {
                 Layout = "${longdate} ${uppercase:${level}} ${message}"
             };
             configuration.AddTarget(consoleTarget);
 
-            FileTarget fileTarget = new FileTarget("file")
+            var fileTarget = new FileTarget("file")
             {
                 FileName = "${basedir}/logs/${shortdate}.log",
                 Layout = "${longdate} ${uppercase:${level}} [${logger}] ${message}"

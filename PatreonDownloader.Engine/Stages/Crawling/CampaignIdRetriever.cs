@@ -6,7 +6,7 @@ using PatreonDownloader.Engine.Exceptions;
 namespace PatreonDownloader.Engine.Stages.Crawling
 {
     /// <summary>
-    /// This class is used to retrieve Campaign ID from creator's posts page
+    ///     This class is used to retrieve Campaign ID from creator's posts page
     /// </summary>
     internal sealed class CampaignIdRetriever : ICampaignIdRetriever
     {
@@ -19,21 +19,23 @@ namespace PatreonDownloader.Engine.Stages.Crawling
         }
 
         /// <summary>
-        /// Retrieve campaign id from supplied url
+        ///     Retrieve campaign id from supplied url
         /// </summary>
         /// <param name="url">Creator's post page url</param>
         /// <returns>Returns creator id</returns>
         public async Task<long> RetrieveCampaignId(string url)
         {
-            if(string.IsNullOrEmpty(url))
+            if (string.IsNullOrEmpty(url))
+            {
                 throw new ArgumentException("Argument cannot be null or empty", nameof(url));
+            }
 
             try
             {
-                string pageHtml = await _webDownloader.DownloadString(url);
+                var pageHtml = await _webDownloader.DownloadString(url);
 
-                Regex regex = new Regex("\"self\": \"https:\\/\\/www\\.patreon\\.com\\/api\\/campaigns\\/(\\d+)\"");
-                Match match = regex.Match(pageHtml);
+                var regex = new Regex("\"self\": \"https:\\/\\/www\\.patreon\\.com\\/api\\/campaigns\\/(\\d+)\"");
+                var match = regex.Match(pageHtml);
                 if (!match.Success)
                 {
                     return -1;

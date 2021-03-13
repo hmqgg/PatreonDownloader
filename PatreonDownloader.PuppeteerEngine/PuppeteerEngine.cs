@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using Ninject;
 using NLog;
-using PatreonDownloader.Common.Interfaces;
 using PatreonDownloader.Common.Models;
 using PatreonDownloader.PuppeteerEngine.Wrappers.Browser;
 using PuppeteerSharp;
@@ -17,32 +13,28 @@ namespace PatreonDownloader.PuppeteerEngine
 {
     public class PuppeteerEngine : IPuppeteerEngine, IDisposable
     {
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private Browser _browser;
         private IWebBrowser _browserWrapper;
 
-        private bool _headless;
         private Uri _remoteBrowserAddress;
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
-        public bool IsHeadless
-        {
-            get { return _headless; }
-        }
 
         /// <summary>
-        /// Create a new instance of PuppeteerEngine using remote browser
+        ///     Create a new instance of PuppeteerEngine using remote browser
         /// </summary>
         /// <param name="remoteBrowserAddress">Address of the remote browser with remote debugging enabled</param>
         public PuppeteerEngine(Uri remoteBrowserAddress)
         {
-            if(remoteBrowserAddress == null)
+            if (remoteBrowserAddress == null)
+            {
                 throw new ArgumentNullException(nameof(remoteBrowserAddress));
+            }
 
             Initialize(remoteBrowserAddress, true);
         }
 
         /// <summary>
-        /// Create a new instance of PuppeteerEngine using local browser
+        ///     Create a new instance of PuppeteerEngine using local browser
         /// </summary>
         /// <param name="headless">If set to false then the browser window will be visible</param>
         public PuppeteerEngine(bool headless = true)
@@ -51,7 +43,7 @@ namespace PatreonDownloader.PuppeteerEngine
         }
 
         /// <summary>
-        /// Create a new instance of PuppeteerEngine
+        ///     Create a new instance of PuppeteerEngine
         /// </summary>
         /// <param name="diParameters">Dependency injection parameters container</param>
         [Inject]
@@ -60,25 +52,68 @@ namespace PatreonDownloader.PuppeteerEngine
             Initialize(diParameters.RemoteBrowserAddress, diParameters.IsHeadless);
         }
 
+        public bool IsHeadless { get; private set; }
+
+        public async Task<IWebBrowser> GetBrowser()
+        {
+            if (_browser != null && !_browser.IsClosed)
+            {
+                return _browserWrapper;
+            }
+
+            if (_remoteBrowserAddress == null)
+            {
+                return await StartLocalBrowser();
+            }
+
+            return await ConnectToRemoteBrowser();
+        }
+
+        public async Task CloseBrowser()
+        {
+            if (_remoteBrowserAddress != null)
+            {
+                return;
+            }
+
+            if (_browser != null && !_browser.IsClosed)
+            {
+                await _browser.CloseAsync();
+                _browser.Dispose();
+                _browser = null;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_remoteBrowserAddress != null)
+            {
+                return;
+            }
+
+            _logger.Debug("Disposing puppeteer engine");
+            _browser?.Dispose();
+        }
+
         private void Initialize(Uri remoteBrowserAddress, bool headless)
         {
             _logger.Debug($"Initializing PuppeteerEngine with parameters {remoteBrowserAddress}, {headless}");
 
             if (remoteBrowserAddress != null)
             {
-                _headless = true;
+                IsHeadless = true;
                 _remoteBrowserAddress = remoteBrowserAddress;
             }
             else
             {
-                _headless = headless;
+                IsHeadless = headless;
                 KillChromeIfRunning();
             }
         }
 
         private void KillChromeIfRunning()
         {
-            Process[] processList = Process.GetProcessesByName("chrome");
+            var processList = Process.GetProcessesByName("chrome");
             if (processList.Length > 0)
             {
                 _logger.Debug($"Found {processList.Length} chrome processes (not sure which one yet)");
@@ -91,8 +126,8 @@ namespace PatreonDownloader.PuppeteerEngine
                     _logger.Debug($"{processList.Length} chrome processes are in patreondownloader's folder");
                     _logger.Warn("Running PatreonDownloader's Chrome detected. Attempting to close it...");
 
-                    bool failed = false;
-                    foreach (Process process in processList)
+                    var failed = false;
+                    foreach (var process in processList)
                     {
                         _logger.Debug($"Attempting to kill PID {process.Id}");
                         try
@@ -119,19 +154,8 @@ namespace PatreonDownloader.PuppeteerEngine
             }
         }
 
-        public async Task<IWebBrowser> GetBrowser()
-        {
-            if (_browser != null && !_browser.IsClosed)
-                return _browserWrapper;
-
-            if (_remoteBrowserAddress == null)
-                return await StartLocalBrowser();
-            else
-                return await ConnectToRemoteBrowser();
-        }
-
         /// <summary>
-        /// Initialize locally running browser
+        ///     Initialize locally running browser
         /// </summary>
         /// <returns></returns>
         private async Task<IWebBrowser> StartLocalBrowser()
@@ -141,17 +165,20 @@ namespace PatreonDownloader.PuppeteerEngine
                 _logger.Debug("Downloading browser");
                 await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
                 _logger.Debug("Launching browser");
-                _browser = await PuppeteerSharp.Puppeteer.LaunchAsync(new LaunchOptions
+                _browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     //Devtools = true,
-                    Headless = _headless,
+                    Headless = IsHeadless,
                     UserDataDir = Path.Combine(Environment.CurrentDirectory, "chromedata"),
                     //Headless mode changes user agent so we need to force it to use "real" user agent
-                    Args = new[] { "--user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3882.0 Safari/537.36\"" }
+                    Args = new[]
+                    {
+                        "--user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3882.0 Safari/537.36\""
+                    }
                 });
 
                 _logger.Debug("Opening new page");
-                Page descriptionPage = await _browser.NewPageAsync();
+                var descriptionPage = await _browser.NewPageAsync();
                 await descriptionPage.SetContentAsync("<h1>This is a browser of patreon downloader</h1>");
 
                 _logger.Debug("Creating IWebBrowser");
@@ -159,7 +186,7 @@ namespace PatreonDownloader.PuppeteerEngine
 
                 return _browserWrapper;
             }
-            catch (PuppeteerSharp.PuppeteerException ex)
+            catch (PuppeteerException ex)
             {
                 _logger.Fatal($"Browser communication error. Exception: {ex}");
                 return null;
@@ -167,7 +194,7 @@ namespace PatreonDownloader.PuppeteerEngine
         }
 
         /// <summary>
-        /// Initialize connection to remote browser
+        ///     Initialize connection to remote browser
         /// </summary>
         /// <returns></returns>
         private async Task<IWebBrowser> ConnectToRemoteBrowser()
@@ -175,13 +202,13 @@ namespace PatreonDownloader.PuppeteerEngine
             try
             {
                 _logger.Debug("Connecting to remote browser");
-                _browser = await PuppeteerSharp.Puppeteer.ConnectAsync(new ConnectOptions()
+                _browser = await Puppeteer.ConnectAsync(new ConnectOptions
                 {
                     BrowserURL = _remoteBrowserAddress.ToString()
                 });
 
                 _logger.Debug("Opening new page");
-                Page descriptionPage = await _browser.NewPageAsync();
+                var descriptionPage = await _browser.NewPageAsync();
                 await descriptionPage.SetContentAsync("<h1>This is a browser of patreon downloader</h1>");
 
                 _logger.Debug("Creating IWebBrowser");
@@ -189,33 +216,11 @@ namespace PatreonDownloader.PuppeteerEngine
 
                 return _browserWrapper;
             }
-            catch (PuppeteerSharp.PuppeteerException ex)
+            catch (PuppeteerException ex)
             {
                 _logger.Fatal($"Browser communication error. Exception: {ex}");
                 return null;
             }
-        }
-
-        public async Task CloseBrowser()
-        {
-            if (_remoteBrowserAddress != null)
-                return;
-
-            if (_browser != null && !_browser.IsClosed)
-            {
-                await _browser.CloseAsync();
-                _browser.Dispose();
-                _browser = null;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_remoteBrowserAddress != null)
-                return;
-
-            _logger.Debug("Disposing puppeteer engine");
-            _browser?.Dispose();
         }
     }
 }

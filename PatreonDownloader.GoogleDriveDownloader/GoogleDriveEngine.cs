@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
@@ -23,7 +21,9 @@ namespace PatreonDownloader.GoogleDriveDownloader
         static GoogleDriveEngine()
         {
             if (!System.IO.File.Exists("gd_credentials.json"))
+            {
                 return;
+            }
 
             UserCredential credential;
             using (var stream =
@@ -31,7 +31,7 @@ namespace PatreonDownloader.GoogleDriveDownloader
             {
                 // The file token.json stores the user's access and refresh tokens, and is created
                 // automatically when the authorization flow completes for the first time.
-                string credPath = "GoogleDriveToken";
+                var credPath = "GoogleDriveToken";
                 credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
                     GoogleClientSecrets.Load(stream).Secrets,
                     Scopes,
@@ -42,19 +42,21 @@ namespace PatreonDownloader.GoogleDriveDownloader
             }
 
             // Create Drive API service.
-            Service = new DriveService(new BaseClientService.Initializer()
+            Service = new DriveService(new BaseClientService.Initializer
             {
                 HttpClientInitializer = credential,
-                ApplicationName = ApplicationName,
+                ApplicationName = ApplicationName
             });
         }
 
         public void Download(string id, string path, bool overwrite = false)
         {
             if (Service == null)
+            {
                 return;
+            }
 
-            File fileResource = Service.Files.Get(id).Execute();
+            var fileResource = Service.Files.Get(id).Execute();
 
             DownloadFileResource(fileResource, path, true, overwrite);
         }
@@ -80,40 +82,41 @@ namespace PatreonDownloader.GoogleDriveDownloader
                         Logger.Warn("[Google Drive] FILE EXISTS: " + path);
                         return;
                     }
-                    else
-                        System.IO.File.Delete(path);
+
+                    System.IO.File.Delete(path);
                 }
 
-                string directory = new FileInfo(path).DirectoryName;
+                var directory = new FileInfo(path).DirectoryName;
 
                 if (!Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
 
-                var stream = new System.IO.MemoryStream();
+                var stream = new MemoryStream();
 
                 Service.Files.Get(fileResource.Id).Download(stream);
-                System.IO.FileStream file = new System.IO.FileStream(path, System.IO.FileMode.Create, System.IO.FileAccess.Write);
+                var file = new FileStream(path, FileMode.Create, FileAccess.Write);
                 stream.WriteTo(file);
 
                 file.Close();
             }
             else
             {
-
-                System.IO.Directory.CreateDirectory(path);
+                Directory.CreateDirectory(path);
                 var subFolderItems = RessInFolder(fileResource.Id);
 
                 foreach (var item in subFolderItems)
+                {
                     DownloadFileResource(item, path, false);
+                }
             }
         }
 
         private List<File> RessInFolder(string folderId)
         {
             Logger.Info($"[Google Drive] Scanning folder {folderId}");
-            List<File> retList = new List<File>();
+            var retList = new List<File>();
             var request = Service.Files.List();
 
             request.Q = $"'{folderId}' in parents";
@@ -122,14 +125,14 @@ namespace PatreonDownloader.GoogleDriveDownloader
             {
                 var children = request.Execute();
 
-                foreach (File child in children.Files)
+                foreach (var child in children.Files)
                 {
                     Logger.Info($"[Google Drive] Found file {child.Name} in folder {folderId}");
                     retList.Add(Service.Files.Get(child.Id).Execute());
                 }
 
                 request.PageToken = children.NextPageToken;
-            } while (!String.IsNullOrEmpty(request.PageToken));
+            } while (!string.IsNullOrEmpty(request.PageToken));
 
             Logger.Info($"[Google Drive] Finished scanning folder {folderId}");
             return retList;

@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 namespace PatreonDownloader.Common.Interfaces
 {
     /// <summary>
-    /// Interface for additional implementations of cookie retrievers
+    ///     Interface for additional implementations of cookie retrievers
     /// </summary>
     public interface ICookieRetriever
     {

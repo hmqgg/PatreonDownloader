@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using PatreonDownloader.Engine.Models;
 
 namespace PatreonDownloader.Engine
 {

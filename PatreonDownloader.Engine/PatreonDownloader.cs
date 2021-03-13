@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -8,82 +7,71 @@ using System.Threading;
 using System.Threading.Tasks;
 using Ninject;
 using NLog;
-using PatreonDownloader.Common.Interfaces;
-using PatreonDownloader.Common.Interfaces.Plugins;
 using PatreonDownloader.Common.Models;
 using PatreonDownloader.Engine.DependencyInjection;
 using PatreonDownloader.Engine.Enums;
 using PatreonDownloader.Engine.Events;
 using PatreonDownloader.Engine.Exceptions;
-using PatreonDownloader.Engine.Helpers;
-using PatreonDownloader.Engine.Models;
 using PatreonDownloader.Engine.Stages.Crawling;
 using PatreonDownloader.Engine.Stages.Downloading;
 using PatreonDownloader.Engine.Stages.Initialization;
-using PatreonDownloader.Interfaces;
-using PatreonDownloader.Interfaces.Models;
 using PatreonDownloader.PuppeteerEngine;
 
 namespace PatreonDownloader.Engine
 {
     public sealed class PatreonDownloader : IPatreonDownloader, IDisposable
     {
-        private CookieContainer _cookieContainer;
-
-        private IPluginManager _pluginManager;
-        private ICookieValidator _cookieValidator;
-        private ICampaignIdRetriever _campaignIdRetriever;
-        private ICampaignInfoRetriever _campaignInfoRetriever;
-        private IPuppeteerEngine _puppeteerEngine;
-        private IDownloadManager _downloadManager;
-        private IPageCrawler _pageCrawler;
-        private IKernel _kernel;
-
-        private SemaphoreSlim _initializationSemaphore;
-        //We don't want those variables to be optimized by compiler
-        private volatile bool _isRunning;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ICampaignIdRetriever _campaignIdRetriever;
+        private readonly ICampaignInfoRetriever _campaignInfoRetriever;
+        private readonly CookieContainer _cookieContainer;
+        private readonly ICookieValidator _cookieValidator;
+        private readonly IDownloadManager _downloadManager;
 
         private bool _headlessBrowser;
 
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly SemaphoreSlim _initializationSemaphore;
 
-        public event EventHandler<DownloaderStatusChangedEventArgs> StatusChanged;
-        public event EventHandler<PostCrawlEventArgs> PostCrawlStart;
-        public event EventHandler<PostCrawlEventArgs> PostCrawlEnd;
-        public event EventHandler<NewCrawledUrlEventArgs> NewCrawledUrl;
-        public event EventHandler<CrawlerMessageEventArgs> CrawlerMessage;
-        public event EventHandler<FileDownloadedEventArgs> FileDownloaded;
+        //We don't want those variables to be optimized by compiler
+        private volatile bool _isRunning;
+        private readonly IKernel _kernel;
+        private readonly IPageCrawler _pageCrawler;
 
-        public bool IsRunning
-        {
-            get => _isRunning;
-        }
+        private readonly IPluginManager _pluginManager;
+        private readonly IPuppeteerEngine _puppeteerEngine;
 
         /// <summary>
-        /// Create new PatreonDownloader using local browser
+        ///     Create new PatreonDownloader using local browser
         /// </summary>
         /// <param name="cookieContainer">Cookie container containing patreon and cloudflare session cookies</param>
         /// <param name="headlessBrowser">If set to false then the internal browser window will be visible.</param>
-        public PatreonDownloader(CookieContainer cookieContainer, bool headlessBrowser = true) : this(cookieContainer, headlessBrowser, null) { }
+        public PatreonDownloader(CookieContainer cookieContainer, bool headlessBrowser = true) : this(cookieContainer, headlessBrowser, null)
+        {
+        }
 
         /// <summary>
-        /// Create new PatreonDownloader using remote browser
+        ///     Create new PatreonDownloader using remote browser
         /// </summary>
         /// <param name="cookieContainer">Cookie container containing patreon and cloudflare session cookies</param>
         /// <param name="remoteBrowserAddress">Remote browser address</param>
         public PatreonDownloader(CookieContainer cookieContainer, Uri remoteBrowserAddress) : this(cookieContainer,
             true, remoteBrowserAddress)
         {
-            if(remoteBrowserAddress == null)
+            if (remoteBrowserAddress == null)
+            {
                 throw new ArgumentNullException(nameof(remoteBrowserAddress));
+            }
         }
 
         // TODO: Implement cancellation token
         /// <summary>
-        /// Create a new PatreonDownloader
+        ///     Create a new PatreonDownloader
         /// </summary>
         /// <param name="cookieContainer">Cookie container containing patreon and cloudflare session cookies</param>
-        /// <param name="headlessBrowser">If set to false then the internal browser window will be visible. Ignored if remoteBrowserAddres is set</param>
+        /// <param name="headlessBrowser">
+        ///     If set to false then the internal browser window will be visible. Ignored if
+        ///     remoteBrowserAddres is set
+        /// </param>
         /// <param name="remoteBrowserAddress">Address of the remote browser</param>
         private PatreonDownloader(CookieContainer cookieContainer, bool headlessBrowser, Uri remoteBrowserAddress)
         {
@@ -96,7 +84,8 @@ namespace PatreonDownloader.Engine
 
             _logger.Debug("Initializing ninject kernel");
             _kernel = new StandardKernel(new MainModule());
-            _kernel.Bind<DIParameters>().ToConstant(new DIParameters(cookieContainer, remoteBrowserAddress == null ? headlessBrowser : true, remoteBrowserAddress));
+            _kernel.Bind<DIParameters>()
+                .ToConstant(new DIParameters(cookieContainer, remoteBrowserAddress != null || headlessBrowser, remoteBrowserAddress));
 
             _logger.Debug("Initializing puppeteer engine");
             _puppeteerEngine = _kernel.Get<IPuppeteerEngine>();
@@ -127,26 +116,46 @@ namespace PatreonDownloader.Engine
             OnStatusChanged(new DownloaderStatusChangedEventArgs(DownloaderStatus.Ready));
         }
 
+        public bool IsRunning => _isRunning;
+
+        public void Dispose()
+        {
+            _initializationSemaphore?.Dispose();
+            _puppeteerEngine?.Dispose();
+            _kernel?.Dispose();
+        }
+
+        public event EventHandler<DownloaderStatusChangedEventArgs> StatusChanged;
+        public event EventHandler<PostCrawlEventArgs> PostCrawlStart;
+        public event EventHandler<PostCrawlEventArgs> PostCrawlEnd;
+        public event EventHandler<NewCrawledUrlEventArgs> NewCrawledUrl;
+        public event EventHandler<CrawlerMessageEventArgs> CrawlerMessage;
+        public event EventHandler<FileDownloadedEventArgs> FileDownloaded;
+
         /// <summary>
-        /// Download specified creator
+        ///     Download specified creator
         /// </summary>
         /// <param name="url">Url of the creator's page</param>
         /// <param name="settings">Downloader settings, will be set to default values if not provided</param>
         public async Task Download(string url, PatreonDownloaderSettings settings = null)
         {
-            if(string.IsNullOrEmpty(url))
+            if (string.IsNullOrEmpty(url))
+            {
                 throw new ArgumentException("Argument cannot be null or empty", nameof(url));
+            }
 
             url = url.ToLower(CultureInfo.InvariantCulture);
 
             if (!url.StartsWith("https://www.patreon.com/"))
+            {
                 throw new PatreonDownloaderException("Download url should start with \"https://www.patreon.com/\"");
+            }
 
             if (!url.StartsWith("https://www.patreon.com/m/")
                 && !url.StartsWith("https://www.patreon.com/user")
                 && !url.EndsWith("/posts"))
             {
-                StringBuilder errorStringBuilder = new StringBuilder();
+                var errorStringBuilder = new StringBuilder();
                 errorStringBuilder.AppendLine("Invalid download url. Make sure it follows one of the following patterns:");
                 errorStringBuilder.AppendLine("https://www.patreon.com/m/#numbers#/posts");
                 errorStringBuilder.AppendLine("https://www.patreon.com/user?u=#numbers#");
@@ -157,9 +166,9 @@ namespace PatreonDownloader.Engine
             }
 
 
-            settings = settings ?? new PatreonDownloaderSettings();
+            settings ??= new PatreonDownloaderSettings();
 
-            string downloadDirectory = settings.DownloadDirectory;
+            var downloadDirectory = settings.DownloadDirectory;
 
             settings.Consumed = true;
             _logger.Debug($"Patreon downloader settings: {settings}");
@@ -201,7 +210,7 @@ namespace PatreonDownloader.Engine
 
                 _logger.Debug("Retrieving campaign ID");
                 OnStatusChanged(new DownloaderStatusChangedEventArgs(DownloaderStatus.RetrievingCampaignInformation));
-                long campaignId = await _campaignIdRetriever.RetrieveCampaignId(url);
+                var campaignId = await _campaignIdRetriever.RetrieveCampaignId(url);
 
                 if (campaignId == -1)
                 {
@@ -210,20 +219,20 @@ namespace PatreonDownloader.Engine
 
                 _logger.Debug($"Campaign ID: {campaignId}");
 
-                _logger.Debug($"Retrieving campaign info");
-                CampaignInfo campaignInfo = await _campaignInfoRetriever.RetrieveCampaignInfo(campaignId);
+                _logger.Debug("Retrieving campaign info");
+                var campaignInfo = await _campaignInfoRetriever.RetrieveCampaignInfo(campaignId);
                 _logger.Debug($"Campaign name: {campaignInfo.Name}");
 
                 try
                 {
-
                     if (string.IsNullOrEmpty(downloadDirectory))
                     {
                         //Download directory is creator's campaign name with invalid path characters removed
-                        string creatorNameDirectory = String.Concat(campaignInfo.Name.Split(Path.GetInvalidFileNameChars()))
+                        var creatorNameDirectory = string.Concat(campaignInfo.Name.Split(Path.GetInvalidFileNameChars()))
                             .ToLower(CultureInfo.InvariantCulture).Trim();
                         downloadDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "download", creatorNameDirectory);
                     }
+
                     if (!Directory.Exists(downloadDirectory))
                     {
                         Directory.CreateDirectory(downloadDirectory);
@@ -237,7 +246,7 @@ namespace PatreonDownloader.Engine
 
                 _logger.Debug("Starting crawler");
                 OnStatusChanged(new DownloaderStatusChangedEventArgs(DownloaderStatus.Crawling));
-                List<CrawledUrl> crawledUrls = await _pageCrawler.Crawl(campaignInfo, settings, downloadDirectory);
+                var crawledUrls = await _pageCrawler.Crawl(campaignInfo, settings, downloadDirectory);
 
                 _logger.Debug("Closing puppeteer browser");
                 await _puppeteerEngine.CloseBrowser();
@@ -258,45 +267,38 @@ namespace PatreonDownloader.Engine
 
         private void PageCrawlerOnCrawlerMessage(object sender, CrawlerMessageEventArgs e)
         {
-            EventHandler<CrawlerMessageEventArgs> handler = CrawlerMessage;
+            var handler = CrawlerMessage;
             handler?.Invoke(this, e);
         }
 
         private void PageCrawlerOnNewCrawledUrl(object sender, NewCrawledUrlEventArgs e)
         {
-            EventHandler<NewCrawledUrlEventArgs> handler = NewCrawledUrl;
+            var handler = NewCrawledUrl;
             handler?.Invoke(this, e);
         }
 
         private void PageCrawlerOnPostCrawlEnd(object sender, PostCrawlEventArgs e)
         {
-            EventHandler<PostCrawlEventArgs> handler = PostCrawlEnd;
+            var handler = PostCrawlEnd;
             handler?.Invoke(this, e);
         }
 
         private void PageCrawlerOnPostCrawlStart(object sender, PostCrawlEventArgs e)
         {
-            EventHandler<PostCrawlEventArgs> handler = PostCrawlStart;
+            var handler = PostCrawlStart;
             handler?.Invoke(this, e);
         }
 
         private void DownloadManagerOnFileDownloaded(object sender, FileDownloadedEventArgs e)
         {
-            EventHandler<FileDownloadedEventArgs> handler = FileDownloaded;
+            var handler = FileDownloaded;
             handler?.Invoke(this, e);
         }
 
         private void OnStatusChanged(DownloaderStatusChangedEventArgs e)
         {
-            EventHandler<DownloaderStatusChangedEventArgs> handler = StatusChanged;
+            var handler = StatusChanged;
             handler?.Invoke(this, e);
-        }
-
-        public void Dispose()
-        {
-            _initializationSemaphore?.Dispose();
-            ((IDisposable)_puppeteerEngine)?.Dispose();
-            _kernel?.Dispose();
         }
     }
 }

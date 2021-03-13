@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net;
-using System.Text;
-using Ninject;
+﻿using Ninject;
 using Ninject.Modules;
-using Ninject.Extensions.Conventions;
 using PatreonDownloader.Common.Interfaces.Plugins;
 using PatreonDownloader.Engine.Helpers;
 using PatreonDownloader.Engine.Stages.Crawling;

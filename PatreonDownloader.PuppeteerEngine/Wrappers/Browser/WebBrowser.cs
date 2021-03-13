@@ -4,8 +4,9 @@ using System.Threading.Tasks;
 namespace PatreonDownloader.PuppeteerEngine.Wrappers.Browser
 {
     /// <summary>
-    /// This class is a wrapper around a Puppeteer Sharp's browser object used to implement proper dependency injection mechanism
-    /// It should copy any used puppeteer sharp's method definitions for ease of code maintenance
+    ///     This class is a wrapper around a Puppeteer Sharp's browser object used to implement proper dependency injection
+    ///     mechanism
+    ///     It should copy any used puppeteer sharp's method definitions for ease of code maintenance
     /// </summary>
     public sealed class WebBrowser : IWebBrowser
     {
@@ -15,10 +16,11 @@ namespace PatreonDownloader.PuppeteerEngine.Wrappers.Browser
         {
             _browser = browser ?? throw new ArgumentNullException(nameof(browser));
         }
+
         public async Task<IWebPage> NewPageAsync()
         {
             IWebPage page = new WebPage(await _browser.NewPageAsync());
-            
+
             return page;
         }
     }

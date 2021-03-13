@@ -1,9 +1,9 @@
 ﻿namespace PatreonDownloader.Engine.Models
 {
     /// <summary>
-    /// Contains campaign information such as avatar and cover url's and campaign's name and id
+    ///     Contains campaign information such as avatar and cover url's and campaign's name and id
     /// </summary>
-    struct CampaignInfo
+    internal struct CampaignInfo
     {
         public long Id { get; set; }
         public string AvatarUrl { get; set; }

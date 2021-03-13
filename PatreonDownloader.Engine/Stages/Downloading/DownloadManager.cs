@@ -1,41 +1,41 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 using NLog;
-using PatreonDownloader.Common.Interfaces;
-using PatreonDownloader.Common.Interfaces.Plugins;
 using PatreonDownloader.Engine.Events;
 using PatreonDownloader.Engine.Exceptions;
 using PatreonDownloader.Engine.Helpers;
-using PatreonDownloader.Interfaces;
 using PatreonDownloader.Interfaces.Models;
 
 namespace PatreonDownloader.Engine.Stages.Downloading
 {
     internal sealed class DownloadManager : IDownloadManager
     {
-        private readonly IPluginManager _pluginManager;
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
-        public event EventHandler<FileDownloadedEventArgs> FileDownloaded;
+        private readonly IPluginManager _pluginManager;
 
         public DownloadManager(IPluginManager pluginManager)
         {
             _pluginManager = pluginManager ?? throw new ArgumentNullException(nameof(pluginManager));
         }
 
+        public event EventHandler<FileDownloadedEventArgs> FileDownloaded;
+
         public async Task Download(List<CrawledUrl> crawledUrls, string downloadDirectory)
         {
-            if(crawledUrls == null)
-                throw new ArgumentNullException(nameof(crawledUrls));
-            if(string.IsNullOrEmpty(downloadDirectory))
-                throw new ArgumentException("Argument cannot be null or empty", nameof(downloadDirectory));
-
-            for (int i = 0; i < crawledUrls.Count; i++)
+            if (crawledUrls == null)
             {
-                CrawledUrl entry = crawledUrls[i];
+                throw new ArgumentNullException(nameof(crawledUrls));
+            }
+
+            if (string.IsNullOrEmpty(downloadDirectory))
+            {
+                throw new ArgumentException("Argument cannot be null or empty", nameof(downloadDirectory));
+            }
+
+            for (var i = 0; i < crawledUrls.Count; i++)
+            {
+                var entry = crawledUrls[i];
 
                 if (!UrlChecker.IsValidUrl(entry.Url))
                 {
@@ -54,9 +54,12 @@ namespace PatreonDownloader.Engine.Stages.Downloading
                 }
                 catch (DownloadException ex)
                 {
-                    string logMessage = $"Error while downloading {entry.Url}: {ex.Message}";
+                    var logMessage = $"Error while downloading {entry.Url}: {ex.Message}";
                     if (ex.InnerException != null)
+                    {
                         logMessage += $". Inner Exception: {ex.InnerException}";
+                    }
+
                     _logger.Error(logMessage);
                     OnFileDownloaded(new FileDownloadedEventArgs(entry.Url, crawledUrls.Count, false, logMessage));
                 }
@@ -69,7 +72,7 @@ namespace PatreonDownloader.Engine.Stages.Downloading
 
         private void OnFileDownloaded(FileDownloadedEventArgs e)
         {
-            EventHandler<FileDownloadedEventArgs> handler = FileDownloaded;
+            var handler = FileDownloaded;
 
             handler?.Invoke(this, e);
         }

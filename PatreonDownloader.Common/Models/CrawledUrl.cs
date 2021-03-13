@@ -1,5 +1,4 @@
 ﻿using System;
-using System.ComponentModel;
 
 namespace PatreonDownloader.Interfaces.Models
 {
@@ -10,6 +9,7 @@ namespace PatreonDownloader.Interfaces.Models
         PostAttachment,
         PostMedia,
         ExternalUrl,
+
         /*ExternalImage,
         DropboxUrl,
         GoogleDriveUrl,
@@ -20,8 +20,9 @@ namespace PatreonDownloader.Interfaces.Models
         CoverFile,
         AvatarFile
     }
+
     /// <summary>
-    /// Represents single file and all required metadata
+    ///     Represents single file and all required metadata
     /// </summary>
     public sealed class CrawledUrl : ICloneable
     {
@@ -29,6 +30,9 @@ namespace PatreonDownloader.Interfaces.Models
         public string Url { get; set; }
         public string Filename { get; set; }
         public CrawledUrlType UrlType { get; set; }
+
+        public DateTime Date { get; set; }
+        public string PostName { get; set; }
 
         public string UrlTypeAsFriendlyString
         {
@@ -58,7 +62,7 @@ namespace PatreonDownloader.Interfaces.Models
 
         public object Clone()
         {
-            return new CrawledUrl {PostId = PostId, Url = Url, Filename = Filename, UrlType = UrlType};
+            return new CrawledUrl { PostId = PostId, Url = Url, Filename = Filename, UrlType = UrlType, PostName = PostName, Date = Date };
         }
     }
 }

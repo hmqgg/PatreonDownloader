@@ -4,9 +4,9 @@ using PatreonDownloader.Interfaces.Models;
 namespace PatreonDownloader.Engine.Models
 {
     /// <summary>
-    /// Represents one crawled page with all results and link to the next page
+    ///     Represents one crawled page with all results and link to the next page
     /// </summary>
-    struct ParsingResult
+    internal struct ParsingResult
     {
         public List<CrawledUrl> Entries;
         public string NextPage;

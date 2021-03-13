@@ -6,6 +6,7 @@ namespace PatreonDownloader.Engine.Helpers
     internal static class ConfigurationManager
     {
         public static IConfiguration Configuration;
+
         static ConfigurationManager()
         {
             //Init config

@@ -1,21 +1,42 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using PatreonDownloader.Engine.Helpers;
+﻿using PatreonDownloader.Engine.Helpers;
 
 namespace PatreonDownloader.Engine
 {
     public sealed class PatreonDownloaderSettings
     {
+        private bool _attachmentOnly;
+        private string _downloadDirectory;
+        private string _filenameExclude;
+        private string _filenameInclude;
+        private bool _noExternal;
+        private bool _overwriteFiles;
+        private string[] _postIds;
+        private bool _saveAvatarAndCover;
         private bool _saveDescriptions;
         private bool _saveEmbeds;
         private bool _saveJson;
-        private bool _saveAvatarAndCover;
-        private string _downloadDirectory;
-        private bool _overwriteFiles;
+        private string _titleExclude;
+        private string _titleInclude;
+        private string _upgradeId;
+
+        public PatreonDownloaderSettings()
+        {
+            _saveDescriptions = true;
+            _saveEmbeds = true;
+            _saveJson = true;
+            _saveAvatarAndCover = true;
+            _downloadDirectory = null;
+            _overwriteFiles = false;
+            _titleInclude = null;
+            _titleExclude = null;
+            _postIds = null;
+            _attachmentOnly = false;
+            _noExternal = false;
+            _upgradeId = null;
+        }
 
         /// <summary>
-        /// Any attempt to set properties will result in exception if this set to true
+        ///     Any attempt to set properties will result in exception if this set to true
         /// </summary>
         internal bool Consumed { get; set; }
 
@@ -44,7 +65,8 @@ namespace PatreonDownloader.Engine
         }
 
         /// <summary>
-        /// Target directory for downloaded files. If set to null files will be downloaded into #AppDirectory#/downloads/#CreatorName#.
+        ///     Target directory for downloaded files. If set to null files will be downloaded into
+        ///     #AppDirectory#/downloads/#CreatorName#.
         /// </summary>
         public string DownloadDirectory
         {
@@ -53,7 +75,7 @@ namespace PatreonDownloader.Engine
         }
 
         /// <summary>
-        /// Overwrite already existing files
+        ///     Overwrite already existing files
         /// </summary>
         public bool OverwriteFiles
         {
@@ -61,19 +83,58 @@ namespace PatreonDownloader.Engine
             set => ConsumableSetter.Set(Consumed, ref _overwriteFiles, value);
         }
 
-        public PatreonDownloaderSettings()
+        public string TitleInclude
         {
-            _saveDescriptions = true;
-            _saveEmbeds = true;
-            _saveJson = true;
-            _saveAvatarAndCover = true;
-            _downloadDirectory = null;
-            _overwriteFiles = false;
+            get => _titleInclude;
+            set => ConsumableSetter.Set(Consumed, ref _titleInclude, value);
+        }
+
+        public string TitleExclude
+        {
+            get => _titleExclude;
+            set => ConsumableSetter.Set(Consumed, ref _titleExclude, value);
+        }
+
+        public string FilenameInclude
+        {
+            get => _filenameInclude;
+            set => ConsumableSetter.Set(Consumed, ref _filenameInclude, value);
+        }
+
+        public string FilenameExclude
+        {
+            get => _filenameExclude;
+            set => ConsumableSetter.Set(Consumed, ref _filenameExclude, value);
+        }
+
+        public string[] PostIds
+        {
+            get => _postIds;
+            set => ConsumableSetter.Set(Consumed, ref _postIds, value);
+        }
+
+        public bool AttachmentOnly
+        {
+            get => _attachmentOnly;
+            set => ConsumableSetter.Set(Consumed, ref _attachmentOnly, value);
+        }
+
+        public bool NoExternal
+        {
+            get => _noExternal;
+            set => ConsumableSetter.Set(Consumed, ref _noExternal, value);
+        }
+
+        public string UpgradeId
+        {
+            get => _upgradeId;
+            set => ConsumableSetter.Set(Consumed, ref _upgradeId, value);
         }
 
         public override string ToString()
         {
-            return $"SaveDescriptions={_saveDescriptions},SaveEmbeds={_saveEmbeds},SaveJson={_saveJson},SaveAvatarAndCover={_saveAvatarAndCover},DownloadDirectory={_downloadDirectory},OverwriteFiles={_overwriteFiles}";
+            return
+                $"SaveDescriptions={_saveDescriptions},SaveEmbeds={_saveEmbeds},SaveJson={_saveJson},SaveAvatarAndCover={_saveAvatarAndCover},DownloadDirectory={_downloadDirectory},OverwriteFiles={_overwriteFiles}";
         }
     }
 }

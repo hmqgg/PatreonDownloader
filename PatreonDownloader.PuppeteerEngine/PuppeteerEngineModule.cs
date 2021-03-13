@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Ninject.Modules;
-using PatreonDownloader.Common.Interfaces;
+﻿using Ninject.Modules;
 using PatreonDownloader.PuppeteerEngine.Wrappers.Browser;
 
 namespace PatreonDownloader.PuppeteerEngine

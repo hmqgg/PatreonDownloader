@@ -2,10 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using CG.Web.MegaApiClient;
 using NLog;
-using NLog.Fluent;
 using PatreonDownloader.Interfaces.Models;
 
 namespace PatreonDownloader.MegaDownloader
@@ -39,9 +37,8 @@ namespace PatreonDownloader.MegaDownloader
 
     internal class MegaDownloader : IDisposable
     {
-        private MegaApiClient _client;
-
         private readonly ILogger _logger = LogManager.GetCurrentClassLogger();
+        private MegaApiClient _client;
 
         public MegaDownloader(MegaCredentials credentials = null)
         {
@@ -56,10 +53,16 @@ namespace PatreonDownloader.MegaDownloader
             }
         }
 
+        public void Dispose()
+        {
+            ReleaseUnmanagedResources();
+            GC.SuppressFinalize(this);
+        }
+
         public MegaDownloadResult DownloadUrl(CrawledUrl crawledUrl, string downloadPath, bool overwriteFiles = false)
         {
             var folders = new List<KeyValuePair<string, MegaFolder>>();
-            Uri uri = new Uri(crawledUrl.Url);
+            var uri = new Uri(crawledUrl.Url);
             INode[] nodes = null;
             INodeInfo fileNode = null;
             try
@@ -71,9 +74,10 @@ namespace PatreonDownloader.MegaDownloader
                 _logger.Debug($"[MEGA] Exception in nodes, probably not a folder: {crawledUrl.Url} - {ex}");
                 fileNode = _client.GetNodeFromLink(uri);
             }
+
             if (nodes != null)
             {
-                foreach (INode node in nodes)
+                foreach (var node in nodes)
                 {
                     if (folders.Any(x => x.Key == node.Id) || node.Type == NodeType.File)
                     {
@@ -102,7 +106,7 @@ namespace PatreonDownloader.MegaDownloader
 
                 var rootFolder = folders.FirstOrDefault(x => string.IsNullOrEmpty(x.Value.ParentId));
 
-                foreach (INode node in nodes.Where(x => x.Type == NodeType.File))
+                foreach (var node in nodes.Where(x => x.Type == NodeType.File))
                 {
                     var path = Path.Combine(
                         downloadPath,
@@ -123,10 +127,8 @@ namespace PatreonDownloader.MegaDownloader
                             _logger.Warn($"[MEGA] FILE EXISTS: {crawledUrl.Url} - {path}");
                             continue;
                         }
-                        else
-                        {
-                            File.Delete(path);
-                        }
+
+                        File.Delete(path);
                     }
 
                     _client.DownloadFile(node, path);
@@ -144,13 +146,11 @@ namespace PatreonDownloader.MegaDownloader
                         _logger.Warn($"[MEGA] FILE EXISTS: {crawledUrl.Url} - {path}");
                         return MegaDownloadResult.FileExists;
                     }
-                    else
-                    {
-                        File.Delete(path);
-                    }
-                }
-                _client.DownloadFile(uri, path);
 
+                    File.Delete(path);
+                }
+
+                _client.DownloadFile(uri, path);
             }
 
             _logger.Debug($"[MEGA] Finished downloading {crawledUrl.Url}");
@@ -166,12 +166,6 @@ namespace PatreonDownloader.MegaDownloader
         {
             _client.Logout();
             _client = null;
-        }
-
-        public void Dispose()
-        {
-            ReleaseUnmanagedResources();
-            GC.SuppressFinalize(this);
         }
     }
 }

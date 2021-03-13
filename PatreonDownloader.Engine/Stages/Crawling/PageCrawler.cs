@@ -1,31 +1,22 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Threading.Tasks;
-using HtmlAgilityPack;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using NLog;
 using PatreonDownloader.Engine.Events;
 using PatreonDownloader.Engine.Models;
-using PatreonDownloader.Engine.Models.JSONObjects;
 using PatreonDownloader.Engine.Models.JSONObjects.Posts;
-using PatreonDownloader.Engine.Stages.Downloading;
 using PatreonDownloader.Interfaces.Models;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PatreonDownloader.Engine.Stages.Crawling
 {
     internal sealed class PageCrawler : IPageCrawler
     {
-        private readonly IWebDownloader _webDownloader;
-        private readonly IPluginManager _pluginManager;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
-        public event EventHandler<PostCrawlEventArgs> PostCrawlStart;
-        public event EventHandler<PostCrawlEventArgs> PostCrawlEnd; 
-        public event EventHandler<NewCrawledUrlEventArgs> NewCrawledUrl;
-        public event EventHandler<CrawlerMessageEventArgs> CrawlerMessage; 
+        private readonly IPluginManager _pluginManager;
+        private readonly IWebDownloader _webDownloader;
 
         public PageCrawler(IWebDownloader webDownloader, IPluginManager pluginManager)
         {
@@ -33,55 +24,109 @@ namespace PatreonDownloader.Engine.Stages.Crawling
             _pluginManager = pluginManager ?? throw new ArgumentNullException(nameof(pluginManager));
         }
 
-        public async Task<List<CrawledUrl>> Crawl(CampaignInfo campaignInfo, PatreonDownloaderSettings settings,
-            string downloadDirectory)
+        public event EventHandler<PostCrawlEventArgs> PostCrawlStart;
+        public event EventHandler<PostCrawlEventArgs> PostCrawlEnd;
+        public event EventHandler<NewCrawledUrlEventArgs> NewCrawledUrl;
+        public event EventHandler<CrawlerMessageEventArgs> CrawlerMessage;
+
+        public async Task<List<CrawledUrl>> Crawl(CampaignInfo campaignInfo, PatreonDownloaderSettings settings, string downloadDirectory)
         {
-            if(campaignInfo.Id < 1)
+            if (campaignInfo.Id < 1)
+            {
                 throw new ArgumentException("Campaign ID cannot be less than 1");
+            }
+
             if (string.IsNullOrEmpty(campaignInfo.Name))
+            {
                 throw new ArgumentException("Campaign name cannot be null or empty");
+            }
+
             if (string.IsNullOrEmpty(campaignInfo.CoverUrl))
+            {
                 throw new ArgumentException("Campaign cover url cannot be null or empty");
+            }
+
             if (string.IsNullOrEmpty(campaignInfo.AvatarUrl))
+            {
                 throw new ArgumentException("Campaign name cannot be null or empty");
+            }
+
             if (settings == null)
+            {
                 throw new ArgumentNullException(nameof(settings));
-            if(string.IsNullOrWhiteSpace(downloadDirectory))
+            }
+
+            if (string.IsNullOrWhiteSpace(downloadDirectory))
+            {
                 throw new ArgumentException("Download directory cannot be empty");
+            }
 
             _logger.Debug($"Starting crawling campaign {campaignInfo.Name}");
-            List<CrawledUrl> crawledUrls = new List<CrawledUrl>();
-            Random rnd = new Random(Guid.NewGuid().GetHashCode());
+            var crawledUrls = new List<CrawledUrl>();
+            var rnd = new Random();
 
             if (settings.SaveAvatarAndCover)
             {
                 _logger.Debug("Adding avatar and cover...");
-                crawledUrls.Add(new CrawledUrl { PostId = 0, Url = campaignInfo.AvatarUrl, UrlType = CrawledUrlType.AvatarFile });
-                crawledUrls.Add(new CrawledUrl { PostId = 0, Url = campaignInfo.CoverUrl, UrlType = CrawledUrlType.CoverFile });
+                crawledUrls.Add(new CrawledUrl { PostId = 0, Url = campaignInfo.AvatarUrl, UrlType = CrawledUrlType.AvatarFile, PostName = campaignInfo.Name, Date = DateTime.MinValue });
+                crawledUrls.Add(new CrawledUrl { PostId = 0, Url = campaignInfo.CoverUrl, UrlType = CrawledUrlType.CoverFile, PostName = campaignInfo.Name, Date = DateTime.MinValue });
             }
 
-            //TODO: Research possibility of not hardcoding this string
-            string nextPage = $"https://www.patreon.com/api/posts?include=user%2Cattachments%2Ccampaign%2Cpoll.choices%2Cpoll.current_user_responses.user%2Cpoll.current_user_responses.choice%2Cpoll.current_user_responses.poll%2Caccess_rules.tier.null%2Cimages.null%2Caudio.null&fields[post]=change_visibility_at%2Ccomment_count%2Ccontent%2Ccurrent_user_can_delete%2Ccurrent_user_can_view%2Ccurrent_user_has_liked%2Cembed%2Cimage%2Cis_paid%2Clike_count%2Cmin_cents_pledged_to_view%2Cpost_file%2Cpost_metadata%2Cpublished_at%2Cpatron_count%2Cpatreon_url%2Cpost_type%2Cpledge_url%2Cthumbnail_url%2Cteaser_text%2Ctitle%2Cupgrade_url%2Curl%2Cwas_posted_by_campaign_owner&fields[user]=image_url%2Cfull_name%2Curl&fields[campaign]=show_audio_post_download_links%2Cavatar_photo_url%2Cearnings_visibility%2Cis_nsfw%2Cis_monthly%2Cname%2Curl&fields[access_rule]=access_rule_type%2Camount_cents&fields[media]=id%2Cimage_urls%2Cdownload_url%2Cmetadata%2Cfile_name&fields[post]=change_visibility_at%2Ccomment_count%2Ccontent%2Ccurrent_user_can_delete%2Ccurrent_user_can_view%2Ccurrent_user_has_liked%2Cembed%2Cimage%2Cis_paid%2Clike_count%2Cmin_cents_pledged_to_view%2Cpost_file%2Cpost_metadata%2Cpublished_at%2Cpatron_count%2Cpatreon_url%2Cpost_type%2Cpledge_url%2Cthumbnail_url%2Cteaser_text%2Ctitle%2Cupgrade_url%2Curl%2Cwas_posted_by_campaign_owner&fields[user]=image_url%2Cfull_name%2Curl&fields[campaign]=show_audio_post_download_links%2Cavatar_photo_url%2Cearnings_visibility%2Cis_nsfw%2Cis_monthly%2Cname%2Curl&fields[access_rule]=access_rule_type%2Camount_cents&fields[media]=id%2Cimage_urls%2Cdownload_url%2Cmetadata%2Cfile_name&sort=-published_at&filter[campaign_id]={campaignInfo.Id}&filter[is_draft]=false&filter[contains_exclusive_posts]=true&json-api-use-default-includes=false&json-api-version=1.0";
+            //TODO: Research possibility of not hard-coding this string
+            var nextPage =
+                $"https://www.patreon.com/api/posts?include=user%2Cattachments%2Ccampaign%2Cpoll.choices%2Cpoll.current_user_responses.user%2Cpoll.current_user_responses.choice%2Cpoll.current_user_responses.poll%2Caccess_rules.tier.null%2Cimages.null%2Caudio.null&fields[post]=change_visibility_at%2Ccomment_count%2Ccontent%2Ccurrent_user_can_delete%2Ccurrent_user_can_view%2Ccurrent_user_has_liked%2Cembed%2Cimage%2Cis_paid%2Clike_count%2Cmin_cents_pledged_to_view%2Cpost_file%2Cpost_metadata%2Cpublished_at%2Cpatron_count%2Cpatreon_url%2Cpost_type%2Cpledge_url%2Cthumbnail_url%2Cteaser_text%2Ctitle%2Cupgrade_url%2Curl%2Cwas_posted_by_campaign_owner&fields[user]=image_url%2Cfull_name%2Curl&fields[campaign]=show_audio_post_download_links%2Cavatar_photo_url%2Cearnings_visibility%2Cis_nsfw%2Cis_monthly%2Cname%2Curl&fields[access_rule]=access_rule_type%2Camount_cents&fields[media]=id%2Cimage_urls%2Cdownload_url%2Cmetadata%2Cfile_name&fields[post]=change_visibility_at%2Ccomment_count%2Ccontent%2Ccurrent_user_can_delete%2Ccurrent_user_can_view%2Ccurrent_user_has_liked%2Cembed%2Cimage%2Cis_paid%2Clike_count%2Cmin_cents_pledged_to_view%2Cpost_file%2Cpost_metadata%2Cpublished_at%2Cpatron_count%2Cpatreon_url%2Cpost_type%2Cpledge_url%2Cthumbnail_url%2Cteaser_text%2Ctitle%2Cupgrade_url%2Curl%2Cwas_posted_by_campaign_owner&fields[user]=image_url%2Cfull_name%2Curl&fields[campaign]=show_audio_post_download_links%2Cavatar_photo_url%2Cearnings_visibility%2Cis_nsfw%2Cis_monthly%2Cname%2Curl&fields[access_rule]=access_rule_type%2Camount_cents&fields[media]=id%2Cimage_urls%2Cdownload_url%2Cmetadata%2Cfile_name&sort=-published_at&filter[campaign_id]={campaignInfo.Id}&filter[is_draft]=false&filter[contains_exclusive_posts]=true&json-api-use-default-includes=false&json-api-version=1.0";
 
-            int page = 0;
+            var page = 0;
             while (!string.IsNullOrEmpty(nextPage))
             {
                 page++;
                 _logger.Debug($"Page #{page}: {nextPage}");
-                string json = await _webDownloader.DownloadString(nextPage);
+                var json = await _webDownloader.DownloadString(nextPage);
 
-                if(settings.SaveJson)
-                    await File.WriteAllTextAsync(Path.Combine(downloadDirectory, $"page_{page}.json"),
-                        json);
+                if (settings.SaveJson)
+                {
+                    await File.WriteAllTextAsync(Path.Combine(downloadDirectory, $"page_{page}.json"), json);
+                }
 
-                ParsingResult result = await ParsePage(json, settings.SaveDescriptions, settings.SaveEmbeds, downloadDirectory);
+                var result = await ParsePage(json, settings.SaveDescriptions, settings.SaveEmbeds, downloadDirectory, settings.TitleInclude,
+                    settings.TitleExclude, settings.UpgradeId, settings.PostIds);
 
-                if(result.Entries.Count > 0)
+                if (result.Entries.Count > 0)
+                {
+                    if (!string.IsNullOrEmpty(settings.FilenameInclude))
+                    {
+                        var removedCount = result.Entries.RemoveAll(e =>
+                            !string.IsNullOrEmpty(e.Filename) && !e.Filename.Contains(settings.FilenameInclude));
+                        _logger.Info(
+                            $"Removed {removedCount} urls because of being desinged to download filename includes {settings.FilenameInclude}");
+                    }
+
+                    if (!string.IsNullOrEmpty(settings.FilenameExclude))
+                    {
+                        var removedCount = result.Entries.RemoveAll(e =>
+                            !string.IsNullOrEmpty(e.Filename) && e.Filename.Contains(settings.FilenameExclude));
+                        _logger.Info(
+                            $"Removed {removedCount} urls because of being desinged to download filename doesn't include {settings.FilenameExclude}");
+                    }
+
+                    if (settings.NoExternal)
+                    {
+                        var removedCount = result.Entries.RemoveAll(e => e.UrlType == CrawledUrlType.ExternalUrl);
+                        _logger.Info($"Removed {removedCount} urls because of being desinged to not download external urls");
+                    }
+
+                    if (settings.AttachmentOnly)
+                    {
+                        var removedCount = result.Entries.RemoveAll(e => e.UrlType != CrawledUrlType.PostAttachment);
+                        _logger.Info($"Removed {removedCount} urls because of being desinged to download attachments only");
+                    }
+
                     crawledUrls.AddRange(result.Entries);
+                }
 
                 nextPage = result.NextPage;
 
-                await Task.Delay(500 * rnd.Next(1, 3)); //0.5 - 1 second delay
+                await Task.Delay(250 * rnd.Next(1, 3)); //0.25 - 0.50 second delay
             }
 
             _logger.Debug("Finished crawl");
@@ -89,12 +134,19 @@ namespace PatreonDownloader.Engine.Stages.Crawling
             return crawledUrls;
         }
 
-        private async Task<ParsingResult> ParsePage(string json, bool saveDescriptions, bool saveEmbeds, string downloadDirectory)
+        private async Task<ParsingResult> ParsePage(string json,
+            bool saveDescriptions,
+            bool saveEmbeds,
+            string downloadDirectory,
+            string titleInclude,
+            string titleExclude,
+            string upgradeId,
+            string[] postIds)
         {
-            List<CrawledUrl> galleryEntries = new List<CrawledUrl>();
-            List<string> skippedIncludesList = new List<string>(); //List for all included data which current account doesn't have access to
+            var galleryEntries = new List<CrawledUrl>();
+            var skippedIncludesList = new List<string>(); //List for all included data which current account doesn't have access to
 
-            Models.JSONObjects.Posts.Root jsonRoot = JsonConvert.DeserializeObject<Models.JSONObjects.Posts.Root>(json);
+            var jsonRoot = JsonConvert.DeserializeObject<Root>(json);
 
             _logger.Debug("Parsing data entries...");
             foreach (var jsonEntry in jsonRoot.Data)
@@ -103,7 +155,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 _logger.Info($"-> {jsonEntry.Id}");
                 if (jsonEntry.Type != "post")
                 {
-                    string msg = $"Invalid type for \"data\": {jsonEntry.Type}, skipping";
+                    var msg = $"Invalid type for \"data\": {jsonEntry.Type}, skipping";
                     _logger.Error($"[{jsonEntry.Id}] {msg}");
                     OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
                     OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg, jsonEntry.IdInt64));
@@ -115,36 +167,76 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 {
                     _logger.Warn($"[{jsonEntry.Id}] Current user cannot view this post");
 
-                    string[] skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? new string[0];
-                    string[] skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? new string[0];
-                    _logger.Debug($"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
+                    var skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    var skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    _logger.Debug(
+                        $"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
 
                     skippedIncludesList.AddRange(skippedAttachments);
                     skippedIncludesList.AddRange(skippedMedia);
 
                     OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, "Current user cannot view this post"));
-                    OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Warning, "Current user cannot view this post", jsonEntry.IdInt64));
+                    OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Warning, "Current user cannot view this post",
+                        jsonEntry.IdInt64));
                     continue;
+                }
+
+                if (postIds != null && !postIds.Contains(jsonEntry.Id.Trim(), StringComparer.OrdinalIgnoreCase))
+                {
+                    var msg = "Not included in specified Post IDs so that it will be skipped";
+                    _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                    OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(upgradeId) && !string.IsNullOrEmpty(jsonEntry.Attributes.UpgradeUrl) && !jsonEntry.Attributes.UpgradeUrl.EndsWith(upgradeId))
+                {
+                    var msg = $"Upgrade URL doesn't end with {upgradeId} so that it will be skipped";
+                    _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                    OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(jsonEntry.Attributes.Title))
+                {
+                    if (!string.IsNullOrEmpty(titleInclude) && !jsonEntry.Attributes.Title.Contains(titleInclude))
+                    {
+                        var msg = $"Title doesn't include {titleInclude} so that it will be skipped";
+                        _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                        OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
+                        continue;
+                    }
+
+                    if (!string.IsNullOrEmpty(titleExclude) && jsonEntry.Attributes.Title.Contains(titleExclude))
+                    {
+                        var msg = $"Title includes {titleInclude} so that it will be skipped";
+                        _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                        OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
+                        continue;
+                    }
                 }
 
                 if (saveDescriptions)
                 {
                     try
                     {
+                        //TODO: WRITE TITLE, AND OTHER METADATA?
                         await File.WriteAllTextAsync(Path.Combine(downloadDirectory, $"{jsonEntry.Id}_description.txt"),
-                            jsonEntry.Attributes.Content); //TODO: WRITE TITLE, AND OTHER METADATA?
+                            jsonEntry.Attributes.Content);
                     }
                     catch (Exception ex)
                     {
-                        string msg = $"Unable to save description: {ex}";
+                        var msg = $"Unable to save description: {ex}";
                         _logger.Error($"[{jsonEntry.Id}] {msg}");
                         OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg, jsonEntry.IdInt64));
                     }
                 }
 
-                CrawledUrl entry = new CrawledUrl
+                var entry = new CrawledUrl
                 {
-                    PostId = jsonEntry.IdInt64
+                    PostId = jsonEntry.IdInt64,
+                    Date = jsonEntry.Attributes.PublishedAt,
+                    PostName = jsonEntry.Attributes.Title
                 };
 
                 if (jsonEntry.Attributes.Embed != null)
@@ -160,45 +252,44 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                         }
                         catch (Exception ex)
                         {
-                            string msg = $"Unable to save embed metadata: {ex}";
+                            var msg = $"Unable to save embed metadata: {ex}";
                             _logger.Error($"[{jsonEntry.Id}] {msg}");
                             OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg,
                                 jsonEntry.IdInt64));
                         }
                     }
 
-                    CrawledUrl subEntry = (CrawledUrl)entry.Clone();
+                    var subEntry = (CrawledUrl) entry.Clone();
                     subEntry.Url = jsonEntry.Attributes.Embed.Url;
                     subEntry.UrlType = CrawledUrlType.ExternalUrl;
                     galleryEntries.Add(subEntry);
-                    _logger.Info(
-                        $"[{jsonEntry.Id}] New embed entry: {subEntry.Url}");
+                    _logger.Info($"[{jsonEntry.Id}] New embed entry: {subEntry.Url}");
 
-                    OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl)subEntry.Clone()));
+                    OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl) subEntry.Clone()));
                 }
 
                 //External urls via plugins (including direct via default plugin)
-                List<string> pluginUrls = await _pluginManager.ExtractSupportedUrls(jsonEntry.Attributes.Content);
-                foreach (string url in pluginUrls)
+                var pluginUrls = await _pluginManager.ExtractSupportedUrls(jsonEntry.Attributes.Content);
+                foreach (var url in pluginUrls)
                 {
-                    CrawledUrl subEntry = (CrawledUrl)entry.Clone();
+                    var subEntry = (CrawledUrl) entry.Clone();
                     subEntry.Url = url;
                     subEntry.UrlType = CrawledUrlType.ExternalUrl;
                     galleryEntries.Add(subEntry);
                     _logger.Info($"[{jsonEntry.Id}] New external entry: {subEntry.Url}");
-                    OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl)subEntry.Clone()));
+                    OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl) subEntry.Clone()));
                 }
 
                 _logger.Debug($"[{jsonEntry.Id}] Scanning attachment data");
                 //Attachments
-                if(jsonEntry.Relationships.Attachments?.Data != null)
+                if (jsonEntry.Relationships.Attachments?.Data != null)
                 {
                     foreach (var attachment in jsonEntry.Relationships.Attachments.Data)
                     {
                         _logger.Debug($"[{jsonEntry.Id} A-{attachment.Id}] Scanning attachment");
                         if (attachment.Type != "attachment") //sanity check 
                         {
-                            string msg = $"Invalid attachment type for {attachment.Id}!!!";
+                            var msg = $"Invalid attachment type for {attachment.Id}!!!";
                             _logger.Fatal($"[{jsonEntry.Id}] {msg}");
                             OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg, jsonEntry.IdInt64));
                             continue;
@@ -208,19 +299,19 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                         if (attachmentData == null)
                         {
-                            string msg = $"Attachment data not found for {attachment.Id}!!!";
+                            var msg = $"Attachment data not found for {attachment.Id}!!!";
                             _logger.Fatal($"[{jsonEntry.Id}] {msg}");
                             OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg, jsonEntry.IdInt64));
                             continue;
                         }
 
-                        CrawledUrl subEntry = (CrawledUrl)entry.Clone(); ;
+                        var subEntry = (CrawledUrl) entry.Clone();
                         subEntry.Url = attachmentData.Attributes.Url;
                         subEntry.Filename = attachmentData.Attributes.Name;
                         subEntry.UrlType = CrawledUrlType.PostAttachment;
                         galleryEntries.Add(subEntry);
                         _logger.Info($"[{jsonEntry.Id} A-{attachment.Id}] New attachment entry: {subEntry.Url}");
-                        OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl)subEntry.Clone()));
+                        OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl) subEntry.Clone()));
                     }
                 }
 
@@ -233,7 +324,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                         _logger.Debug($"[{jsonEntry.Id} M-{image.Id}] Scanning media");
                         if (image.Type != "media") //sanity check 
                         {
-                            string msg = $"invalid media type for {image.Id}!!!";
+                            var msg = $"invalid media type for {image.Id}!!!";
                             _logger.Fatal($"[{jsonEntry.Id}] {msg}");
                             OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg, jsonEntry.IdInt64));
                             continue;
@@ -243,24 +334,24 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                         if (imageData == null)
                         {
-                            string msg = $"media data not found for {image.Id}!!!";
+                            var msg = $"media data not found for {image.Id}!!!";
                             _logger.Fatal($"[{jsonEntry.Id}] {msg}");
                             OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg, jsonEntry.IdInt64));
                             continue;
                         }
 
                         _logger.Debug($"[{jsonEntry.Id} M-{image.Id}] Searching for download url");
-                        string downloadUrl = imageData.Attributes.DownloadUrl;
+                        var downloadUrl = imageData.Attributes.DownloadUrl;
 
                         _logger.Debug($"[{jsonEntry.Id} M-{image.Id}] Download url is: {downloadUrl}");
 
-                        CrawledUrl subEntry = (CrawledUrl)entry.Clone(); ;
+                        var subEntry = (CrawledUrl) entry.Clone();
                         subEntry.Url = downloadUrl;
                         subEntry.Filename = imageData.Attributes.FileName;
                         subEntry.UrlType = CrawledUrlType.PostMedia;
                         galleryEntries.Add(subEntry);
                         _logger.Info($"[{jsonEntry.Id} M-{image.Id}] New media entry from {subEntry.Url}");
-                        OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl)subEntry.Clone()));
+                        OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl) subEntry.Clone()));
                     }
                 }
 
@@ -287,7 +378,6 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                         {
                             _logger.Debug($"[{jsonEntry.Id}] Found regular url");
                             entry.Url = jsonEntry.Attributes.Image.Url;
-
                         }
                         else
                         {
@@ -302,7 +392,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                     entry.UrlType = CrawledUrlType.PostFile;
                     _logger.Info($"[{jsonEntry.Id}] New entry: {entry.Url}");
                     galleryEntries.Add(entry);
-                    OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl)entry.Clone()));
+                    OnNewCrawledUrl(new NewCrawledUrlEventArgs((CrawledUrl) entry.Clone()));
                 }
                 else
                 {
@@ -317,17 +407,19 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 _logger.Debug($"[{jsonEntry.Id}] Verification: Started");
                 if (jsonEntry.Type != "attachment" && jsonEntry.Type != "media")
                 {
-                    if (jsonEntry.Type != "user" && 
-                        jsonEntry.Type != "campaign" && 
-                        jsonEntry.Type != "access-rule" && 
-                        jsonEntry.Type != "reward" && 
+                    if (jsonEntry.Type != "user" &&
+                        jsonEntry.Type != "campaign" &&
+                        jsonEntry.Type != "access-rule" &&
+                        jsonEntry.Type != "reward" &&
                         jsonEntry.Type != "poll_choice" &&
-                        jsonEntry.Type != "poll_response")
+                        jsonEntry.Type != "poll_response" &&
+                        jsonEntry.Type != "poll")
                     {
-                        string msg = $"Verification for {jsonEntry.Id}: Unknown type for \"included\": {jsonEntry.Type}";
+                        var msg = $"Verification for {jsonEntry.Id}: Unknown type for \"included\": {jsonEntry.Type}";
                         _logger.Error(msg);
                         OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Error, msg));
                     }
+
                     continue;
                 }
 
@@ -335,9 +427,9 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                 if (jsonEntry.Type == "attachment")
                 {
-                    if (!skippedIncludesList.Any(x => x == jsonEntry.Id) && !galleryEntries.Any(x => x.Url == jsonEntry.Attributes.Url))
+                    if (skippedIncludesList.All(x => x != jsonEntry.Id) && galleryEntries.All(x => x.Url != jsonEntry.Attributes.Url))
                     {
-                        string msg =
+                        var msg =
                             $"Verification for {jsonEntry.Id}: Parsing verification failure! Attachment with this id might not referenced by any post.";
                         _logger.Warn(msg);
                         OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Warning, msg));
@@ -347,9 +439,9 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                 if (jsonEntry.Type == "media")
                 {
-                    if (!skippedIncludesList.Any(x=>x == jsonEntry.Id) && !galleryEntries.Any(x => x.Url == jsonEntry.Attributes.DownloadUrl/* || x.DownloadUrl == jsonEntry.Attributes.ImageUrls.Original || x.DownloadUrl == jsonEntry.Attributes.ImageUrls.Default*/))
+                    if (skippedIncludesList.All(x => x != jsonEntry.Id) && galleryEntries.All(x => x.Url != jsonEntry.Attributes.DownloadUrl))
                     {
-                        string msg =
+                        var msg =
                             $"Verification for {jsonEntry.Id}: Parsing verification failure! Media with this id might not be referenced by any post.";
                         _logger.Warn(msg);
                         OnCrawlerMessage(new CrawlerMessageEventArgs(CrawlerMessageType.Warning, msg));
@@ -361,30 +453,30 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, true));
             }
 
-            return new ParsingResult {Entries = galleryEntries, NextPage = jsonRoot.Links?.Next};
+            return new ParsingResult { Entries = galleryEntries, NextPage = jsonRoot.Links?.Next };
         }
 
         private void OnPostCrawlStart(PostCrawlEventArgs e)
         {
-            EventHandler<PostCrawlEventArgs> handler = PostCrawlStart;
+            var handler = PostCrawlStart;
             handler?.Invoke(this, e);
         }
 
         private void OnPostCrawlEnd(PostCrawlEventArgs e)
         {
-            EventHandler<PostCrawlEventArgs> handler = PostCrawlEnd;
+            var handler = PostCrawlEnd;
             handler?.Invoke(this, e);
         }
 
         private void OnNewCrawledUrl(NewCrawledUrlEventArgs e)
         {
-            EventHandler<NewCrawledUrlEventArgs> handler = NewCrawledUrl;
+            var handler = NewCrawledUrl;
             handler?.Invoke(this, e);
         }
 
         private void OnCrawlerMessage(CrawlerMessageEventArgs e)
         {
-            EventHandler<CrawlerMessageEventArgs> handler = CrawlerMessage;
+            var handler = CrawlerMessage;
             handler?.Invoke(this, e);
         }
     }

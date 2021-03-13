@@ -9,15 +9,16 @@ namespace PatreonDownloader.Engine.Helpers
 {
     internal class RemoteFilenameRetriever : IRemoteFilenameRetriever
     {
-        private Regex _urlRegex;
-        private HttpClient _httpClient;
-
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly HttpClient _httpClient;
+        private readonly Regex _urlRegex;
 
         public RemoteFilenameRetriever(CookieContainer cookieContainer)
         {
-            if(cookieContainer == null)
+            if (cookieContainer == null)
+            {
                 throw new ArgumentNullException(nameof(cookieContainer));
+            }
 
             _urlRegex = new Regex(@"[^\/\&\?]+\.\w{3,4}(?=([\?&].*$|$))");
 
@@ -29,14 +30,16 @@ namespace PatreonDownloader.Engine.Helpers
         }
 
         /// <summary>
-        /// Retrieve remote file name
+        ///     Retrieve remote file name
         /// </summary>
         /// <param name="url">File name url</param>
         /// <returns>File name if url is valid, null if url is invalid</returns>
         public async Task<string> RetrieveRemoteFileName(string url)
         {
             if (string.IsNullOrEmpty(url))
+            {
                 return null;
+            }
 
             string filename = null;
             try
@@ -44,7 +47,9 @@ namespace PatreonDownloader.Engine.Helpers
                 var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
 
                 if (response.Content.Headers.ContentDisposition?.FileName != null)
+                {
                     filename = response.Content.Headers.ContentDisposition.FileName.Replace("\"", "");
+                }
 
                 _logger.Debug($"Content-Disposition returned: {filename}");
             }
@@ -57,21 +62,25 @@ namespace PatreonDownloader.Engine.Helpers
                 _logger.Error($"TaskCanceledException while trying to retrieve remote file name: {ex}");
             }
 
-            if (String.IsNullOrEmpty(filename))
+            if (string.IsNullOrEmpty(filename))
             {
-                Match match = _urlRegex.Match(url);
+                var match = _urlRegex.Match(url);
                 if (!match.Success)
                 {
                     return null;
                 }
+
                 filename = match.Groups[0].Value; //?? throw new ArgumentException("Invalid url", nameof(url));
 
                 // Patreon truncates extensions so we need to fix this
                 if (url.Contains("patreonusercontent.com/", StringComparison.Ordinal))
                 {
                     if (filename.EndsWith(".jpe"))
+                    {
                         filename += "g";
+                    }
                 }
+
                 _logger.Debug($"Content-Disposition failed, fallback to url extraction, extracted name: {filename}");
             }
 

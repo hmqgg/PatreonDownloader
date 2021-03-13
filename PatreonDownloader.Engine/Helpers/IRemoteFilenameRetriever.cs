@@ -2,7 +2,7 @@
 
 namespace PatreonDownloader.Engine.Helpers
 {
-    interface IRemoteFilenameRetriever
+    internal interface IRemoteFilenameRetriever
     {
         Task<string> RetrieveRemoteFileName(string url);
     }
