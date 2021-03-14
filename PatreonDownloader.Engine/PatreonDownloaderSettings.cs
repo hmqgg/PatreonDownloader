@@ -1,4 +1,5 @@
 ﻿using PatreonDownloader.Engine.Helpers;
+using System;
 
 namespace PatreonDownloader.Engine
 {
@@ -18,6 +19,7 @@ namespace PatreonDownloader.Engine
         private string _titleExclude;
         private string _titleInclude;
         private string _upgradeId;
+        private DateTime? _dateAfter; 
 
         public PatreonDownloaderSettings()
         {
@@ -33,6 +35,7 @@ namespace PatreonDownloader.Engine
             _attachmentOnly = false;
             _noExternal = false;
             _upgradeId = null;
+            _dateAfter = null;
         }
 
         /// <summary>
@@ -129,6 +132,12 @@ namespace PatreonDownloader.Engine
         {
             get => _upgradeId;
             set => ConsumableSetter.Set(Consumed, ref _upgradeId, value);
+        }
+
+        public DateTime? DateAfter
+        {
+            get => _dateAfter;
+            set => ConsumableSetter.Set(Consumed, ref _dateAfter, value);
         }
 
         public override string ToString()

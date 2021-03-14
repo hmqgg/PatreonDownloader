@@ -89,7 +89,7 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 }
 
                 var result = await ParsePage(json, settings.SaveDescriptions, settings.SaveEmbeds, downloadDirectory, settings.TitleInclude,
-                    settings.TitleExclude, settings.UpgradeId, settings.PostIds);
+                    settings.TitleExclude, settings.UpgradeId, settings.PostIds, settings.DateAfter);
 
                 if (result.Entries.Count > 0)
                 {
@@ -141,7 +141,8 @@ namespace PatreonDownloader.Engine.Stages.Crawling
             string titleInclude,
             string titleExclude,
             string upgradeId,
-            string[] postIds)
+            string[] postIds,
+            DateTime? dateAfter)
         {
             var galleryEntries = new List<CrawledUrl>();
             var skippedIncludesList = new List<string>(); //List for all included data which current account doesn't have access to
@@ -183,18 +184,48 @@ namespace PatreonDownloader.Engine.Stages.Crawling
 
                 if (postIds != null && !postIds.Contains(jsonEntry.Id.Trim(), StringComparer.OrdinalIgnoreCase))
                 {
-                    skippedIncludesList.Add(jsonEntry.Id);
+                    var skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    var skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    _logger.Debug(
+                        $"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
+
+                    skippedIncludesList.AddRange(skippedAttachments);
+                    skippedIncludesList.AddRange(skippedMedia);
+
                     var msg = "Not included in specified Post IDs so that it will be skipped";
-                    _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                    _logger.Info($"[{jsonEntry.Id}] {msg}");
+                    OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
+                    continue;
+                }
+
+                if (dateAfter != null && jsonEntry.Attributes.PublishedAt != DateTime.MinValue && jsonEntry.Attributes.PublishedAt < dateAfter)
+                {
+                    var skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    var skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    _logger.Debug(
+                        $"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
+
+                    skippedIncludesList.AddRange(skippedAttachments);
+                    skippedIncludesList.AddRange(skippedMedia);
+
+                    var msg = $"Published before specified date {dateAfter:yyyy-MM-dd HH:mm:ss} so that it will be skipped";
+                    _logger.Info($"[{jsonEntry.Id}] {msg}");
                     OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
                     continue;
                 }
 
                 if (!string.IsNullOrEmpty(upgradeId) && !string.IsNullOrEmpty(jsonEntry.Attributes.UpgradeUrl) && !jsonEntry.Attributes.UpgradeUrl.EndsWith(upgradeId))
                 {
-                    skippedIncludesList.Add(jsonEntry.Id);
+                    var skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    var skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                    _logger.Debug(
+                        $"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
+
+                    skippedIncludesList.AddRange(skippedAttachments);
+                    skippedIncludesList.AddRange(skippedMedia);
+
                     var msg = $"Upgrade URL doesn't end with {upgradeId} so that it will be skipped";
-                    _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                    _logger.Info($"[{jsonEntry.Id}] {msg}");
                     OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
                     continue;
                 }
@@ -203,18 +234,32 @@ namespace PatreonDownloader.Engine.Stages.Crawling
                 {
                     if (!string.IsNullOrEmpty(titleInclude) && !jsonEntry.Attributes.Title.Contains(titleInclude))
                     {
-                        skippedIncludesList.Add(jsonEntry.Id);
+                        var skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                        var skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                        _logger.Debug(
+                            $"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
+
+                        skippedIncludesList.AddRange(skippedAttachments);
+                        skippedIncludesList.AddRange(skippedMedia);
+
                         var msg = $"Title doesn't include {titleInclude} so that it will be skipped";
-                        _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                        _logger.Info($"[{jsonEntry.Id}] {msg}");
                         OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
                         continue;
                     }
 
                     if (!string.IsNullOrEmpty(titleExclude) && jsonEntry.Attributes.Title.Contains(titleExclude))
                     {
-                        skippedIncludesList.Add(jsonEntry.Id);
+                        var skippedAttachments = jsonEntry.Relationships.Attachments?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                        var skippedMedia = jsonEntry.Relationships.Images?.Data.Select(x => x.Id).ToArray() ?? Array.Empty<string>();
+                        _logger.Debug(
+                            $"[{jsonEntry.Id}] Adding {skippedAttachments.Length} attachments and {skippedMedia.Length} media items to skipped list");
+
+                        skippedIncludesList.AddRange(skippedAttachments);
+                        skippedIncludesList.AddRange(skippedMedia);
+
                         var msg = $"Title includes {titleInclude} so that it will be skipped";
-                        _logger.Debug($"[{jsonEntry.Id}] {msg}");
+                        _logger.Info($"[{jsonEntry.Id}] {msg}");
                         OnPostCrawlEnd(new PostCrawlEventArgs(jsonEntry.IdInt64, false, msg));
                         continue;
                     }

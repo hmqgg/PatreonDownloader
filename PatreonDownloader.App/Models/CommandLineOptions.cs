@@ -40,6 +40,9 @@ namespace PatreonDownloader.App.Models
         [Option("no-external", Required = false, HelpText = "Do not download external URLs", Default = false)]
         public bool NoExternal { get; set; }
 
+        [Option("date-after", Required = false, HelpText = "Download posts published after specified date only")]
+        public string DateAfter { get; set; }
+
         [Option("campaign-images", Required = false, HelpText = "Download campaign's avatar and cover images", Default = false)]
         public bool SaveAvatarAndCover { get; set; }
 
