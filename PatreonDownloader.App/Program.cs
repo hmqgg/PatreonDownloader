@@ -50,7 +50,7 @@ namespace PatreonDownloader.App
                     PostIds = options.PostIds?.Split(';'),
                     AttachmentOnly = options.AttachmentOnly,
                     NoExternal = options.NoExternal,
-                    DateAfter = DateTime.Parse(options.DateAfter),
+                    DateAfter = string.IsNullOrEmpty(options.DateAfter) ? (DateTime?) null : DateTime.Parse(options.DateAfter),
                     DownloadDirectory = options.DownloadDirectory,
                     OverwriteFiles = options.OverwriteFiles
                 };

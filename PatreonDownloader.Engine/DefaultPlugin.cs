@@ -64,11 +64,13 @@ namespace PatreonDownloader.Engine
                 throw new ArgumentException("Argument cannot be null or empty", nameof(downloadDirectory));
             }
 
-            if (crawledUrl.Url.IndexOf("dropbox.com/", StringComparison.Ordinal) != -1)
+            if (crawledUrl.Url.Contains("dropbox.com/", StringComparison.OrdinalIgnoreCase))
             {
                 if (!crawledUrl.Url.EndsWith("?dl=1"))
                 {
-                    crawledUrl.Url = crawledUrl.Url.EndsWith("?dl=0") ? crawledUrl.Url.Replace("?dl=0", "?dl=1") : $"{crawledUrl.Url}?dl=1";
+                    crawledUrl.Url = crawledUrl.Url.EndsWith("?dl=0")
+                        ? crawledUrl.Url.Replace("?dl=0", "?dl=1")
+                        : $"{crawledUrl.Url}?dl=1";
                 }
 
                 _logger.Debug($"[{crawledUrl.PostId}] This is a dropbox entry: {crawledUrl.Url}");
