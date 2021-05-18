@@ -31,11 +31,6 @@ namespace PatreonDownloader.Engine.Stages.Initialization
                 throw new CookieValidationException("__cf_bm cookie not found");
             }
 
-            if (cookies["__cfduid"] == null)
-            {
-                throw new CookieValidationException("__cfduid cookie not found");
-            }
-
             if (cookies["session_id"] == null)
             {
                 throw new CookieValidationException("session_id cookie not found");
