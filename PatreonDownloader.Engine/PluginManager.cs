@@ -12,7 +12,9 @@ namespace PatreonDownloader.Engine
 {
     internal sealed class PluginManager : IPluginManager
     {
-        private static readonly string PluginsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins");
+        private static readonly string
+            PluginsDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins");
+
         private readonly IPlugin _defaultPlugin;
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -92,7 +94,7 @@ namespace PatreonDownloader.Engine
 
             var downloadPlugin = _defaultPlugin;
 
-            if (_plugins != null && _plugins.Count > 0)
+            if (_plugins is { Count: > 0 })
             {
                 foreach (var plugin in _plugins)
                 {
@@ -105,8 +107,11 @@ namespace PatreonDownloader.Engine
             }
 
             // Sanitize dir.
-            var title = Path.GetInvalidFileNameChars().Aggregate(crawledUrl.PostName, (current, c) => current.Replace(c, '_'));
-            var dir = Path.Combine(downloadDirectory, crawledUrl.Date.ToString("yyyyMM"), $"[{crawledUrl.PostId}]{title}");
+            var title = Path.GetInvalidFileNameChars()
+                .Aggregate(crawledUrl.PostName, (current, c) => current.Replace(c, '_'))
+                .Trim();
+            var dir = Path.Combine(downloadDirectory, crawledUrl.Date.ToString("yyyyMM"),
+                $"[{crawledUrl.PostId}]{title}");
 
             Directory.CreateDirectory(dir);
             await downloadPlugin.Download(crawledUrl, dir);

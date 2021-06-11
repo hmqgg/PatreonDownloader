@@ -1,12 +1,12 @@
-﻿using NLog;
-using PatreonDownloader.Common.Models;
-using PatreonDownloader.Engine.Exceptions;
-using PatreonDownloader.PuppeteerEngine;
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web;
+using NLog;
+using PatreonDownloader.Common.Models;
+using PatreonDownloader.Engine.Exceptions;
+using PatreonDownloader.PuppeteerEngine;
 
 namespace PatreonDownloader.Engine
 {
@@ -24,11 +24,12 @@ namespace PatreonDownloader.Engine
             var handler = new HttpClientHandler
             {
                 UseCookies = true,
-                CookieContainer = diParameters.CookieContainer ?? throw new ArgumentNullException(nameof(diParameters.CookieContainer))
+                CookieContainer = diParameters.CookieContainer ??
+                                  throw new ArgumentNullException(nameof(diParameters.CookieContainer))
             };
             _httpClient = new HttpClient(handler);
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2486.0 Safari/537.36 Edge/13.10586");
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36 Edg/91.0.864.41");
         }
 
         /// <summary>
@@ -66,9 +67,10 @@ namespace PatreonDownloader.Engine
 
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                await using Stream contentStream = await (await _httpClient.SendAsync(request)).Content.ReadAsStreamAsync(),
-                    stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+                using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                await using var contentStream = await response.Content.ReadAsStreamAsync();
+                await using Stream stream =
+                    new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
                 _logger.Debug($"Starting download: {url}");
                 await contentStream.CopyToAsync(stream);
                 _logger.Debug($"Finished download: {url}");
@@ -101,7 +103,8 @@ namespace PatreonDownloader.Engine
                 await page.CloseAsync();
 
                 content = content
-                    .Replace("<html><head></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">", "")
+                    .Replace("<html><head></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">",
+                        "")
                     .Replace("</pre></body></html>", "");
                 return HttpUtility.HtmlDecode(content);
             }

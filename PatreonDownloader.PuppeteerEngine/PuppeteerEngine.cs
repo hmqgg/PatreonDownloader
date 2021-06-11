@@ -163,7 +163,7 @@ namespace PatreonDownloader.PuppeteerEngine
             try
             {
                 _logger.Debug("Downloading browser");
-                await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+                await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
                 _logger.Debug("Launching browser");
                 _browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {

@@ -47,10 +47,7 @@ namespace PatreonDownloader.Engine
         public string Author => "Aleksey Tsutsey";
         public string ContactInformation => "https://github.com/Megalan/PatreonDownloader";
 
-        public Task<bool> IsSupportedUrl(string url)
-        {
-            return Task.FromResult(!string.IsNullOrEmpty(url));
-        }
+        public Task<bool> IsSupportedUrl(string url) => Task.FromResult(!string.IsNullOrEmpty(url));
 
         public async Task Download(CrawledUrl crawledUrl, string downloadDirectory)
         {
@@ -149,12 +146,14 @@ namespace PatreonDownloader.Engine
 
                     if (matches.Count == 0)
                     {
-                        throw new DownloadException($"[{crawledUrl.PostId}] Unable to retrieve file id for {crawledUrl.Url}, contact developer!");
+                        throw new DownloadException(
+                            $"[{crawledUrl.PostId}] Unable to retrieve file id for {crawledUrl.Url}, contact developer!");
                     }
 
                     if (matches.Count > 1)
                     {
-                        throw new DownloadException($"[{crawledUrl.PostId}] More than 1 media found in URL {crawledUrl.Url}");
+                        throw new DownloadException(
+                            $"[{crawledUrl.PostId}] More than 1 media found in URL {crawledUrl.Url}");
                     }
 
                     appendStr = matches[0].Groups[5].Value;
@@ -163,7 +162,8 @@ namespace PatreonDownloader.Engine
                 filename = $"{Path.GetFileNameWithoutExtension(filename)}_{appendStr}{Path.GetExtension(filename)}";
             }
 
-            await _webDownloader.DownloadFile(crawledUrl.Url, Path.Combine(downloadDirectory, filename), _overwriteFiles);
+            await _webDownloader.DownloadFile(crawledUrl.Url, Path.Combine(downloadDirectory, filename),
+                _overwriteFiles);
         }
 
         public async Task BeforeStart(bool overwriteFiles)

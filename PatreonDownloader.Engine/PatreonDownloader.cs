@@ -21,31 +21,32 @@ namespace PatreonDownloader.Engine
 {
     public sealed class PatreonDownloader : IPatreonDownloader, IDisposable
     {
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly ICampaignIdRetriever _campaignIdRetriever;
         private readonly ICampaignInfoRetriever _campaignInfoRetriever;
         private readonly CookieContainer _cookieContainer;
         private readonly ICookieValidator _cookieValidator;
         private readonly IDownloadManager _downloadManager;
 
-        private bool _headlessBrowser;
-
         private readonly SemaphoreSlim _initializationSemaphore;
-
-        //We don't want those variables to be optimized by compiler
-        private volatile bool _isRunning;
         private readonly IKernel _kernel;
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly IPageCrawler _pageCrawler;
 
         private readonly IPluginManager _pluginManager;
         private readonly IPuppeteerEngine _puppeteerEngine;
+
+        private bool _headlessBrowser;
+
+        //We don't want those variables to be optimized by compiler
+        private volatile bool _isRunning;
 
         /// <summary>
         ///     Create new PatreonDownloader using local browser
         /// </summary>
         /// <param name="cookieContainer">Cookie container containing patreon and cloudflare session cookies</param>
         /// <param name="headlessBrowser">If set to false then the internal browser window will be visible.</param>
-        public PatreonDownloader(CookieContainer cookieContainer, bool headlessBrowser = true) : this(cookieContainer, headlessBrowser, null)
+        public PatreonDownloader(CookieContainer cookieContainer, bool headlessBrowser = true) : this(cookieContainer,
+            headlessBrowser, null)
         {
         }
 
@@ -80,12 +81,14 @@ namespace PatreonDownloader.Engine
 
             _initializationSemaphore = new SemaphoreSlim(1, 1);
 
-            _logger.Debug($"Initializing PatreonDownloader with parameters {headlessBrowser}, {remoteBrowserAddress}...");
+            _logger.Debug(
+                $"Initializing PatreonDownloader with parameters {headlessBrowser}, {remoteBrowserAddress}...");
 
             _logger.Debug("Initializing ninject kernel");
             _kernel = new StandardKernel(new MainModule());
             _kernel.Bind<DIParameters>()
-                .ToConstant(new DIParameters(cookieContainer, remoteBrowserAddress != null || headlessBrowser, remoteBrowserAddress));
+                .ToConstant(new DIParameters(cookieContainer, remoteBrowserAddress != null || headlessBrowser,
+                    remoteBrowserAddress));
 
             _logger.Debug("Initializing puppeteer engine");
             _puppeteerEngine = _kernel.Get<IPuppeteerEngine>();
@@ -156,12 +159,14 @@ namespace PatreonDownloader.Engine
                 && !url.EndsWith("/posts"))
             {
                 var errorStringBuilder = new StringBuilder();
-                errorStringBuilder.AppendLine("Invalid download url. Make sure it follows one of the following patterns:");
+                errorStringBuilder.AppendLine(
+                    "Invalid download url. Make sure it follows one of the following patterns:");
                 errorStringBuilder.AppendLine("https://www.patreon.com/m/#numbers#/posts");
                 errorStringBuilder.AppendLine("https://www.patreon.com/user?u=#numbers#");
                 errorStringBuilder.AppendLine("https://www.patreon.com/user/posts?u=#numbers#");
                 errorStringBuilder.AppendLine("https://www.patreon.com/#creator name#/posts");
-                errorStringBuilder.AppendLine("If you think this is an error, feel free to create a new issue on GitHub.");
+                errorStringBuilder.AppendLine(
+                    "If you think this is an error, feel free to create a new issue on GitHub.");
                 throw new PatreonDownloaderException(errorStringBuilder.ToString());
             }
 
@@ -228,9 +233,12 @@ namespace PatreonDownloader.Engine
                     if (string.IsNullOrEmpty(downloadDirectory))
                     {
                         //Download directory is creator's campaign name with invalid path characters removed
-                        var creatorNameDirectory = string.Concat(campaignInfo.Name.Split(Path.GetInvalidFileNameChars()))
-                            .ToLower(CultureInfo.InvariantCulture).Trim();
-                        downloadDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "download", creatorNameDirectory);
+                        var creatorNameDirectory = string
+                            .Concat(campaignInfo.Name.Split(Path.GetInvalidFileNameChars()))
+                            .ToLower(CultureInfo.InvariantCulture)
+                            .Trim();
+                        downloadDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "download",
+                            creatorNameDirectory);
                     }
 
                     if (!Directory.Exists(downloadDirectory))
